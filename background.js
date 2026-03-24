@@ -1,12 +1,13 @@
 /**
  * Tab Aging — MV3 service worker.
  *
- * Permissions (see manifest.json):
+ * Permissions (manifest.json):
  * - storage: persist pages + settings in chrome.storage.local
- * - alarms: refresh + cleanup (30s chained delay in fast test, daily period in prod)
- * - tabs: read tab URLs and active state for “seen” + broadcast visuals
- * - scripting: inject content scripts when sendMessage fails (e.g. pre-injection race)
- * - host_permissions http(s)/*: inject pages + fetch favicon bytes here (no page CORS taint)
+ * - alarms: periodic refresh + stale-entry cleanup (fast-test chain vs 24h prod)
+ * - tabs: read tab URLs / active state for “seen” and push APPLY_AGE_STATE
+ * - scripting: inject utils.js + content.js when sendMessage fails (no content script yet)
+ * - host_permissions http(s)/*: required so chrome.scripting.executeScript can run on normal sites
+ *   (Chrome will not inject into chrome:// etc. even with broad hosts; we still skip those URLs.)
  */
 importScripts('utils.js');
 
@@ -17,62 +18,10 @@ importScripts('utils.js');
   var ALARM_DAILY = 'tab-aging-daily';
   var STORAGE_MS = 180 * 86400000; /* cleanup entries older than this */
 
-  function blobToDataUrl(blob) {
-    return new Promise(function (resolve) {
-      var fr = new FileReader();
-      fr.onloadend = function () {
-        resolve(typeof fr.result === 'string' ? fr.result : null);
-      };
-      fr.onerror = function () {
-        resolve(null);
-      };
-      fr.readAsDataURL(blob);
-    });
-  }
-
-  async function fetchFaviconAsDataUrl(href) {
-    if (!href || typeof href !== 'string') return null;
-    try {
-      var u = new URL(href);
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    } catch (e) {
-      return null;
-    }
-    try {
-      var r = await fetch(href, {
-        credentials: 'omit',
-        redirect: 'follow',
-        cache: 'force-cache',
-      });
-      if (!r.ok) return null;
-      var ct = (r.headers.get('content-type') || '').toLowerCase();
-      if (ct.indexOf('text/html') === 0) return null;
-      var blob = await r.blob();
-      if (!blob || blob.size === 0) return null;
-      if (blob.size > 512 * 1024) return null;
-      return await blobToDataUrl(blob);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  async function fetchFaviconWithFallbacks(href, pageOrigin) {
-    var seen = {};
-    var urls = [];
-    function add(u) {
-      if (!u || seen[u]) return;
-      seen[u] = true;
-      urls.push(u);
-    }
-    add(href);
-    try {
-      if (pageOrigin) add(new URL('/favicon.ico', pageOrigin).href);
-    } catch (e) {}
-    for (var i = 0; i < urls.length; i++) {
-      var d = await fetchFaviconAsDataUrl(urls[i]);
-      if (d) return d;
-    }
-    return null;
+  function logd() {
+    if (!U.DEBUG) return;
+    var a = ['[Tab Aging]'].concat(Array.prototype.slice.call(arguments));
+    console.debug.apply(console, a);
   }
 
   /** Fast test uses one-shot alarms every 30s (0.5 min); prod uses repeating 24h alarm. */
@@ -104,9 +53,6 @@ importScripts('utils.js');
     return U.normalizeUrl(url);
   }
 
-  /**
-   * Remove stale URL keys (not opened in STORAGE_MS).
-   */
   async function cleanupOldPages(pages) {
     var now = Date.now();
     var cutoff = now - STORAGE_MS;
@@ -120,7 +66,7 @@ importScripts('utils.js');
         removed++;
       }
     }
-    if (removed) console.debug('[Tab Aging] cleanup removed', removed, 'stale page(s)');
+    if (removed) logd('cleanup removed', removed, 'stale page(s)');
     return next;
   }
 
@@ -146,6 +92,15 @@ importScripts('utils.js');
   }
 
   async function sendAgeToTab(tabId, url, settings, pages) {
+    if (url == null || typeof url !== 'string') {
+      logd('skipped tab', tabId, '(no url)');
+      return;
+    }
+    if (!U.isTrackableUrl(url)) {
+      logd('skipped restricted URL', url);
+      return;
+    }
+
     if (!settings.enabled) {
       try {
         await chrome.tabs.sendMessage(tabId, {
@@ -153,9 +108,10 @@ importScripts('utils.js');
           ageDays: 0,
           level: 0,
           settings: settings,
+          pageUrl: url,
         });
       } catch (e) {
-        /* tab may not have content script */
+        /* tab may not have injectable script */
       }
       return;
     }
@@ -167,7 +123,10 @@ importScripts('utils.js');
       ageDays: comp.ageDays,
       level: comp.level,
       settings: settings,
+      pageUrl: url,
     };
+
+    logd('applying level', comp.level, 'to', url);
 
     try {
       await chrome.tabs.sendMessage(tabId, payload);
@@ -177,9 +136,10 @@ importScripts('utils.js');
           target: { tabId: tabId },
           files: ['utils.js', 'content.js'],
         });
+        logd('injected content script for tab', tabId);
         await chrome.tabs.sendMessage(tabId, payload);
       } catch (e2) {
-        /* restricted page, unloaded tab, etc. */
+        logd('sendMessage failed after inject', tabId, (e2 && e2.message) || e2);
       }
     }
   }
@@ -189,7 +149,7 @@ importScripts('utils.js');
     var tabs = await chrome.tabs.query({});
     for (var i = 0; i < tabs.length; i++) {
       var t = tabs[i];
-      if (t.id == null || !U.isTrackableUrl(t.url)) continue;
+      if (t.id == null) continue;
       await sendAgeToTab(t.id, t.url, state.settings, state.pages);
     }
   }
@@ -201,27 +161,28 @@ importScripts('utils.js');
     } catch (e) {
       return;
     }
-    if (!tab.url || !U.isTrackableUrl(tab.url)) return;
+    if (!tab.url || !U.isTrackableUrl(tab.url)) {
+      logd('onActiveTabContext skip', tab.url);
+      return;
+    }
 
     await markPageSeen(tab.url);
 
     var state = await getState();
-    /* Active tab is always “fresh” after markPageSeen */
     await sendAgeToTab(tabId, tab.url, state.settings, state.pages);
 
-    /* Background tabs: show urgency without resetting their lastSeenAt */
     var others = await chrome.tabs.query({});
     for (var i = 0; i < others.length; i++) {
       var ot = others[i];
       if (ot.id === tabId) continue;
-      if (ot.id == null || !U.isTrackableUrl(ot.url)) continue;
+      if (ot.id == null) continue;
       await sendAgeToTab(ot.id, ot.url, state.settings, state.pages);
     }
   }
 
   chrome.tabs.onActivated.addListener(function (activeInfo) {
     onActiveTabContext(activeInfo.tabId).catch(function (e) {
-      console.debug('[Tab Aging] onActivated', e);
+      logd('onActivated', e);
     });
   });
 
@@ -233,7 +194,7 @@ importScripts('utils.js');
         return onActiveTabContext(tabId);
       })
       .catch(function (e) {
-        console.debug('[Tab Aging] onUpdated', e);
+        logd('onUpdated', e);
       });
   });
 
@@ -246,7 +207,7 @@ importScripts('utils.js');
         await saveState({ pages: state.pages });
         await refreshAllTabsVisuals();
       } catch (e) {
-        console.debug('[Tab Aging] alarm', e);
+        logd('alarm', e);
       } finally {
         if (U.FAST_TEST_MODE) {
           chrome.alarms.create(ALARM_DAILY, { delayInMinutes: U.FAST_TEST_ALARM_DELAY_MINUTES });
@@ -260,13 +221,13 @@ importScripts('utils.js');
       var state = await getState();
       await saveState({ settings: state.settings, pages: state.pages });
       scheduleAgingAlarm();
-      console.debug(
-        '[Tab Aging] installed / updated; fast mode:',
+      logd(
+        'installed / updated; fast:',
         U.FAST_TEST_MODE,
         U.FAST_TEST_MODE ? 'delay min ' + U.FAST_TEST_ALARM_DELAY_MINUTES : 'period min ' + U.ALARM_PERIOD_MINUTES_PROD
       );
     })().catch(function (e) {
-      console.debug('[Tab Aging] onInstalled', e);
+      logd('onInstalled', e);
     });
   });
 
@@ -295,17 +256,7 @@ importScripts('utils.js');
       });
       return true;
     }
-    if (message && message.type === 'TAB_AGING_GET_FAVICON_DATA') {
-      (async function () {
-        var dataUrl = await fetchFaviconWithFallbacks(message.href, message.origin);
-        sendResponse({ dataUrl: dataUrl });
-      })().catch(function () {
-        sendResponse({ dataUrl: null });
-      });
-      return true;
-    }
   });
 
-  /* Initial paint for already-open tabs when worker wakes */
   refreshAllTabsVisuals().catch(function () {});
 })();

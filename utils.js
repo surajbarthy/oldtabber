@@ -7,6 +7,12 @@
   'use strict';
 
   /**
+   * Verbose extension logs (tab URL, inject retries, skips). Off by default.
+   * Set to true in this file while debugging, reload the extension.
+   */
+  var DEBUG = false;
+
+  /**
    * When true: one “aging unit” = 30 seconds and a chained alarm fires every 30s (see background.js).
    * Set to false for production (real calendar days + one repeating alarm per 24h).
    */
@@ -20,16 +26,30 @@
   var DEFAULT_THRESHOLDS = [1, 4, 8, 15];
 
   /**
-   * Pages we must not inject into or track.
-   * chrome://, edge://, about:, chrome-extension:// are restricted by Chrome anyway;
-   * we still guard for clarity and any future broad host permissions.
+   * Browser-internal / non-web schemes we never inject into or track.
+   * Normal pages must be http: or https: only (MVP).
    */
+  function isRestrictedBrowserUrl(href) {
+    if (!href || typeof href !== 'string') return true;
+    var h = href.trim().toLowerCase();
+    return (
+      h.indexOf('chrome://') === 0 ||
+      h.indexOf('edge://') === 0 ||
+      h.indexOf('about:') === 0 ||
+      h.indexOf('chrome-extension://') === 0 ||
+      h.indexOf('moz-extension://') === 0 ||
+      h.indexOf('devtools://') === 0 ||
+      h.indexOf('view-source:') === 0 ||
+      h.indexOf('file://') === 0
+    );
+  }
+
   function isTrackableUrl(url) {
     if (!url || typeof url !== 'string') return false;
+    if (isRestrictedBrowserUrl(url)) return false;
     try {
       var u = new URL(url);
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-      return true;
+      return u.protocol === 'http:' || u.protocol === 'https:';
     } catch (e) {
       return false;
     }
@@ -100,11 +120,13 @@
   }
 
   global.TabAgingUtils = {
+    DEBUG: DEBUG,
     FAST_TEST_MODE: FAST_TEST_MODE,
     AGING_UNIT_MS: AGING_UNIT_MS,
     FAST_TEST_ALARM_DELAY_MINUTES: FAST_TEST_ALARM_DELAY_MINUTES,
     ALARM_PERIOD_MINUTES_PROD: ALARM_PERIOD_MINUTES_PROD,
     DEFAULT_THRESHOLDS: DEFAULT_THRESHOLDS,
+    isRestrictedBrowserUrl: isRestrictedBrowserUrl,
     isTrackableUrl: isTrackableUrl,
     normalizeUrl: normalizeUrl,
     getAgeDays: getAgeDays,
