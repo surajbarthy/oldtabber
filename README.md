@@ -12,14 +12,18 @@ All state is **local** (`chrome.storage.local`). No backend.
 ## How aging works
 
 - **`lastSeenAt`** is updated when a tab becomes **active** (and when an **http/https** tab **finishes loading** while active).
-- **Age in days** is `floor((now - lastSeenAt) / 86400000)` — computed on demand, not stored as a separate counter.
+- **Age** is `floor((now - lastSeenAt) / AGING_UNIT_MS)` — in production that unit is one **day** (`86400000` ms); see fast test mode below.
 - **Focusing a tab** sets `lastSeenAt` to now, so **age resets to 0** for that URL key while you are on it.
 - **Other open tabs** keep their own `lastSeenAt`; when you switch away, their favicons/titles refresh to reflect **their** staleness.
-- A **daily `chrome.alarms`** tick runs **cleanup** and **refreshes visuals** on open tabs.
+- A **`chrome.alarms`** tick runs **cleanup** and **refreshes visuals** on open tabs (every **24 hours** in production, **every minute** while fast test mode is on).
+
+### Fast test mode (development)
+
+In **`utils.js`**, `FAST_TEST_MODE` is currently **`true`**: each threshold step uses **one minute** instead of one day, and the alarm runs **every minute** so background tabs update without waiting. Set **`FAST_TEST_MODE`** to **`false`** and reload the extension for real-world behavior. After changing the flag, reload the extension on `chrome://extensions` so the alarm schedule updates.
 
 ## Title markers (when enabled)
 
-| Age (days) | Marker |
+| Age (days, or minutes in fast test mode) | Marker |
 |------------|--------|
 | 0 | _(none)_ |
 | 1–3 | 🔸 |
@@ -41,7 +45,7 @@ Thresholds are configurable in storage as `settings.agingThresholds` (default `[
 | Permission | Reason |
 |------------|--------|
 | `storage` | Persist `pages` + `settings`. |
-| `alarms` | Once-per-day refresh + stale entry cleanup. |
+| `alarms` | Periodic refresh + stale entry cleanup (daily in prod, 1 min when testing). |
 | `tabs` | Read tab URLs / active state for “seen” and broadcasting visuals. |
 | `scripting` | Inject `utils.js` + `content.js` when `sendMessage` fails (race / special frames). |
 | `host_permissions` `http://*/*`, `https://*/*` | Content scripts and injection on normal websites only (MVP scope). |

@@ -6,7 +6,15 @@
 (function (global) {
   'use strict';
 
-  /** Default aging boundaries (days): level bumps at 1, 4, 8, 15+ */
+  /**
+   * When true: one “aging unit” = 1 minute and the background alarm runs every minute.
+   * Set to false for production (real days + one alarm per 24h).
+   */
+  var FAST_TEST_MODE = true;
+  var AGING_UNIT_MS = FAST_TEST_MODE ? 60 * 1000 : 86400000;
+  var ALARM_PERIOD_MINUTES = FAST_TEST_MODE ? 1 : 24 * 60;
+
+  /** Default aging boundaries (days in prod, minutes when FAST_TEST_MODE): bumps at 1, 4, 8, 15+ */
   var DEFAULT_THRESHOLDS = [1, 4, 8, 15];
 
   /**
@@ -43,11 +51,11 @@
     var now = nowMs != null ? nowMs : Date.now();
     var diff = now - lastSeenAt;
     if (diff < 0) return 0;
-    return Math.floor(diff / 86400000);
+    return Math.floor(diff / AGING_UNIT_MS);
   }
 
   /**
-   * Map age in whole days to visual level 0–4 using ascending thresholds.
+   * Map age (whole days in prod, whole minutes in FAST_TEST_MODE) to visual level 0–4.
    * thresholds: e.g. [1,4,8,15] → 0:<1, 1:1–3, 2:4–7, 3:8–14, 4:15+
    */
   function getAgeLevel(ageDays, thresholds) {
@@ -90,6 +98,9 @@
   }
 
   global.TabAgingUtils = {
+    FAST_TEST_MODE: FAST_TEST_MODE,
+    AGING_UNIT_MS: AGING_UNIT_MS,
+    ALARM_PERIOD_MINUTES: ALARM_PERIOD_MINUTES,
     DEFAULT_THRESHOLDS: DEFAULT_THRESHOLDS,
     isTrackableUrl: isTrackableUrl,
     normalizeUrl: normalizeUrl,

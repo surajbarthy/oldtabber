@@ -3,7 +3,7 @@
  *
  * Permissions (see manifest.json):
  * - storage: persist pages + settings in chrome.storage.local
- * - alarms: daily tick to refresh aging visuals on open tabs + cleanup
+ * - alarms: periodic tick to refresh aging visuals on open tabs + cleanup (1 min in fast test mode)
  * - tabs: read tab URLs and active state for “seen” + broadcast visuals
  * - scripting: inject content scripts when sendMessage fails (e.g. pre-injection race)
  * - host_permissions http(s)/*: required to inject/read normal web pages
@@ -184,15 +184,15 @@ importScripts('utils.js');
     (async function () {
       var state = await getState();
       await saveState({ settings: state.settings, pages: state.pages });
-      chrome.alarms.create(ALARM_DAILY, { periodInMinutes: 24 * 60 });
-      console.debug('[Tab Aging] installed / updated; daily alarm set');
+      chrome.alarms.create(ALARM_DAILY, { periodInMinutes: U.ALARM_PERIOD_MINUTES });
+      console.debug('[Tab Aging] installed / updated; alarm period (min):', U.ALARM_PERIOD_MINUTES);
     })().catch(function (e) {
       console.debug('[Tab Aging] onInstalled', e);
     });
   });
 
   chrome.runtime.onStartup.addListener(function () {
-    chrome.alarms.create(ALARM_DAILY, { periodInMinutes: 24 * 60 });
+    chrome.alarms.create(ALARM_DAILY, { periodInMinutes: U.ALARM_PERIOD_MINUTES });
   });
 
   chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
