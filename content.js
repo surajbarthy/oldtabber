@@ -81,7 +81,8 @@
       if (applyingTitle) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(function () {
-        if (applyingTitle || !latestState || !latestState.settings.useTitleMarkers) return;
+        var st = latestState;
+        if (applyingTitle || !st || !st.settings || !st.settings.useTitleMarkers) return;
         var cur = document.title;
         if (cur.indexOf(marker) === 0) return;
         applyingTitle = true;
@@ -109,15 +110,19 @@
       if (!latestState || latestState.level <= 0 || !wantsFaviconEffects(latestState.settings)) return;
       if (t) clearTimeout(t);
       t = setTimeout(function () {
-        /* latestState may be cleared (navigate, disable) before this debounced run. */
-        if (!latestState || latestState.level <= 0 || !wantsFaviconEffects(latestState.settings)) {
+        /**
+         * Snapshot — pinManagedFaviconLast() mutates <head> synchronously and can re-enter this
+         * observer; another path may clear latestState before we read .level again.
+         */
+        var st = latestState;
+        if (!st || st.level <= 0 || !wantsFaviconEffects(st.settings)) {
           return;
         }
         pinManagedFaviconLast();
         var el = document.getElementById(MANAGED_LINK_ID);
         var h = el ? el.getAttribute('href') || '' : '';
         if (!el || h.indexOf('data:') !== 0) {
-          applyManagedFaviconComposite(latestState.level, latestState.settings).catch(function (e) {
+          applyManagedFaviconComposite(st.level, st.settings).catch(function (e) {
             logd('favicon reapply after head mutation failed', e);
           });
         }

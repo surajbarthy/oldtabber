@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Aging",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Idle-tab urgency: dot/tint on favicon + optional title emoji. Toolbar popup + options. MV3, local-only.",
   "permissions": [
     "storage",
