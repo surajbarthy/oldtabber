@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tab Aging — Options</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f6f7;
+        --card: #fff;
+        --border: #d8d8dc;
+        --text: #1a1a1e;
+        --muted: #5c5c66;
+        --accent: #c62828;
+        --accent-soft: rgba(198, 40, 40, 0.12);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1b1b1f;
+          --card: #252529;
+          --border: #3a3a42;
+          --text: #f2f2f4;
+          --muted: #a0a0ab;
+          --accent-soft: rgba(239, 83, 80, 0.18);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 0;
+        padding: 2rem 1.5rem 3rem;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        max-width: 40rem;
+      }
+      h1 {
+        font-size: 1.35rem;
+        font-weight: 650;
+        margin: 0 0 0.25rem;
+        letter-spacing: -0.02em;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-bottom: 1.75rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1.25rem 1.35rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.65rem 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .row:first-of-type {
+        padding-top: 0;
+      }
+      label {
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      .hint {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 0.2rem;
+        font-weight: 400;
+      }
+      input[type='checkbox'] {
+        width: 1.1rem;
+        height: 1.1rem;
+        accent-color: var(--accent);
+      }
+      .thresholds {
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin: 0.5rem 0 0;
+      }
+      .thresholds code {
+        background: var(--accent-soft);
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+      }
+      .actions {
+        margin-top: 1.25rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.55rem 1rem;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.danger {
+        border-color: rgba(198, 40, 40, 0.45);
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+      button:hover {
+        filter: brightness(0.97);
+      }
+      @media (prefers-color-scheme: dark) {
+        button:hover {
+          filter: brightness(1.08);
+        }
+      }
+      .status {
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-top: 0.75rem;
+        min-height: 1.25rem;
+      }
+      footer {
+        margin-top: 2rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Tab Aging</h1>
+    <p class="sub">Idle tabs look more urgent over time — favicon tint and optional title markers. All data stays on your device.</p>
+
+    <div class="card">
+      <div class="row">
+        <label for="enabled">
+          Extension enabled
+          <span class="hint">Turn off to restore normal titles and favicons.</span>
+        </label>
+        <input type="checkbox" id="enabled" />
+      </div>
+      <div class="row">
+        <label for="favicon">
+          Favicon overlay
+          <span class="hint">Red tint / badge by age bucket.</span>
+        </label>
+        <input type="checkbox" id="favicon" />
+      </div>
+      <div class="row">
+        <label for="title">
+          Title markers
+          <span class="hint">Prepend 🔸 → ⛔ by age (see README).</span>
+        </label>
+        <input type="checkbox" id="title" />
+      </div>
+      <p class="thresholds">
+        Aging thresholds (days, level bumps at):
+        <code id="thresholdsLabel">1, 4, 8, 15</code>
+      </p>
+    </div>
+
+    <div class="card actions">
+      <button type="button" class="danger" id="resetPages">Reset all tracked pages</button>
+      <p class="hint" style="margin-top: 0.75rem; margin-bottom: 0">
+        Clears stored last-open times. Open tabs refresh after a moment.
+      </p>
+      <p class="status" id="status" aria-live="polite"></p>
+    </div>
+
+    <footer>Manifest V3 · <code>chrome.storage.local</code> · daily <code>chrome.alarms</code></footer>
+    <script src="utils.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
