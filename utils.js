@@ -181,7 +181,7 @@
   }
 
   /**
-   * Level 0 = no marker; 1–4 = 🔸 🔶 🔴 ⛔. Idle time must reach thresholdsMs[i] for level i+1.
+   * Level 0 = no marker; 1–4 = emoji or minimal tiers. Idle time must reach thresholdsMs[i] for level i+1.
    */
   function getLevelFromIdleMs(idleMs, thresholdsMs) {
     var t =
@@ -239,18 +239,31 @@
   }
 
   /**
+   * Emoji-style tab markers. Chrome tab titles use normal text layout; color vs monochrome varies by
+   * OS/font. Levels: 🥚 → ⏳ → 🔥 → ☠️.
+   */
+  var EMOJI_MARKER_L1 = '\uD83E\uDD5A';
+  var EMOJI_MARKER_L2 = '\u23F3';
+  var EMOJI_MARKER_L3 = '\uD83D\uDD25';
+  var EMOJI_MARKER_L4 = '\u2620' + '\uFE0F';
+
+  /**
    * Prefixes we may have injected (all styles + legacy). Longest UTF-16 length first for stripping.
+   * Still strips U+26A0 U+FE0F / bare U+26A0 for titles saved under the old level-2 warning marker,
+   * and 👀 (U+1F440) for titles saved under the previous level-2 emoji.
    */
   function getTitleStripMarkersSortedDesc() {
     var raw = [
+      EMOJI_MARKER_L2,
+      EMOJI_MARKER_L4,
       '\u26A0\uFE0F',
-      '\u2620\uFE0F',
+      '\uD83D\uDC40',
       '\uD83D\uDD38',
       '\uD83D\uDD36',
       '\uD83D\uDD34',
       '\u26D4',
-      '\uD83D\uDD25',
-      '\u23F3',
+      EMOJI_MARKER_L3,
+      EMOJI_MARKER_L1,
       '\u25CF',
       '\u2716',
       '\u2715',
@@ -267,6 +280,7 @@
 
   /**
    * Remove any known injected title prefix(es) from the start, repeatedly (e.g. "● ● Title").
+   * Does not Unicode-normalize or alter inner code points — only removes known whole-prefix matches.
    */
   function stripInjectedTitlePrefixes(rawTitle) {
     if (!rawTitle) return '';
@@ -296,19 +310,20 @@
     if (st === 'emoji') {
       switch (level) {
         case 1:
-          return '\u23F3';
+          return EMOJI_MARKER_L1;
         case 2:
-          return '\u26A0\uFE0F';
+          return EMOJI_MARKER_L2;
         case 3:
-          return '\uD83D\uDD25';
+          return EMOJI_MARKER_L3;
         default:
-          return '\u2620\uFE0F';
+          return EMOJI_MARKER_L4;
       }
     }
     switch (level) {
       case 1:
         return '\u00B7';
       case 2:
+        return '\u25CB';
       case 3:
         return '\u25CF';
       default:

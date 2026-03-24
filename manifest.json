@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OldTabber",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "OldTabber: gentle attention decay for tabs — title indicators by how long since you last used each tab. MV3, local-only.",
   "permissions": [
     "storage",
@@ -10,12 +10,24 @@
     "scripting"
   ],
   "host_permissions": ["http://*/*", "https://*/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "OldTabber"
+    "default_title": "OldTabber",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
