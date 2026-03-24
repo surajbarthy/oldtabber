@@ -128,14 +128,20 @@
   function normalizeSettings(raw) {
     var s = raw && typeof raw === 'object' ? raw : {};
     var o = Object.assign(defaultSettings(), s);
+    /**
+     * Legacy `useFaviconOverlay: true` meant “any favicon effect”. If the user never saved the
+     * new keys, turn both dot and tint on. If overlay was false, do **not** force dot/tint off —
+     * that wiped defaults and made upgrades look broken. Strip `useFaviconOverlay` from output.
+     */
     if (Object.prototype.hasOwnProperty.call(s, 'useFaviconOverlay')) {
       var hasDot = Object.prototype.hasOwnProperty.call(s, 'useFaviconDot');
       var hasTint = Object.prototype.hasOwnProperty.call(s, 'useFaviconTint');
-      if (!hasDot && !hasTint) {
-        o.useFaviconDot = !!s.useFaviconOverlay;
-        o.useFaviconTint = !!s.useFaviconOverlay;
+      if (!hasDot && !hasTint && s.useFaviconOverlay) {
+        o.useFaviconDot = true;
+        o.useFaviconTint = true;
       }
     }
+    delete o.useFaviconOverlay;
     return o;
   }
 

@@ -27,7 +27,8 @@
   }
 
   function wantsFaviconEffects(settings) {
-    return !!(settings && (settings.useFaviconDot || settings.useFaviconTint));
+    if (!settings) return false;
+    return !!(settings.useFaviconDot === true || settings.useFaviconTint === true);
   }
 
   var TITLE_MARKERS = ['\uD83D\uDD38', '\uD83D\uDD36', '\uD83D\uDD34', '\u26D4'];
@@ -101,7 +102,8 @@
   }
 
   function ensureFaviconHeadObserver() {
-    if (faviconHeadObserver || !document.head) return;
+    disconnectFaviconObserver();
+    if (!document.head) return;
     var t = null;
     faviconHeadObserver = new MutationObserver(function () {
       if (!latestState || latestState.level <= 0 || !wantsFaviconEffects(latestState.settings)) return;
@@ -156,7 +158,45 @@
     return sizes.length ? sizes[0].href : new URL('/favicon.ico', document.location.origin).href;
   }
 
-  function requestFaviconDataUrlFromBackground(href, origin) {
+  async function requestFaviconDataUrlFromBackground(href, origin) {
+    var o = origin || window.location.origin;
+    var first = await requestFaviconDataUrlFromBackgroundOnce(href, o);
+    if (first) return first;
+    await new Promise(function (r) {
+      setTimeout(r, 50);
+    });
+    return requestFaviconDataUrlFromBackgroundOnce(href, o);
+  }
+
+  function loadImageFromDataUrl(dataUrl) {
+    return new Promise(function (resolve) {
+      if (!dataUrl) {
+        resolve(null);
+        return;
+      }
+      var img = new Image();
+      img.onload = function () {
+        if (img.decode && typeof img.decode === 'function') {
+          img
+            .decode()
+            .then(function () {
+              resolve(img);
+            })
+            .catch(function () {
+              resolve(img);
+            });
+        } else {
+          resolve(img);
+        }
+      };
+      img.onerror = function () {
+        resolve(null);
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  function requestFaviconDataUrlFromBackgroundOnce(href, origin) {
     return new Promise(function (resolve) {
       chrome.runtime.sendMessage(
         { type: 'TAB_AGING_GET_FAVICON_DATA', href: href, origin: origin || window.location.origin },
@@ -168,23 +208,6 @@
           resolve(res && res.dataUrl ? res.dataUrl : null);
         }
       );
-    });
-  }
-
-  function loadImageFromDataUrl(dataUrl) {
-    return new Promise(function (resolve) {
-      if (!dataUrl) {
-        resolve(null);
-        return;
-      }
-      var img = new Image();
-      img.onload = function () {
-        resolve(img);
-      };
-      img.onerror = function () {
-        resolve(null);
-      };
-      img.src = dataUrl;
     });
   }
 
@@ -219,15 +242,15 @@
       ctx.fillText('\u00B7', size / 2, size / 2);
     }
 
-    if (settings.useFaviconTint) {
-      var alphas = [0, 0.2, 0.34, 0.5, 0.64];
+    if (settings.useFaviconTint === true) {
+      var alphas = [0, 0.28, 0.42, 0.55, 0.68];
       var a = alphas[Math.min(level, 4)];
       ctx.fillStyle = 'rgba(220, 38, 38, ' + a + ')';
       ctx.fillRect(0, 0, size, size);
     }
 
-    if (settings.useFaviconDot) {
-      var radii = [0, 3.5, 4.8, 6.2, 7.5];
+    if (settings.useFaviconDot === true) {
+      var radii = [0, 4.5, 6, 7.5, 9];
       var r = radii[Math.min(level, 4)];
       var margin = 2;
       var cx = size - margin - r;
@@ -250,6 +273,7 @@
   }
 
   function removeManagedFavicon() {
+    disconnectFaviconObserver();
     var el = document.getElementById(MANAGED_LINK_ID);
     var el2 = document.getElementById(MANAGED_LINK_ID_2);
     if (el) el.remove();
@@ -260,34 +284,31 @@
     }
   }
 
+  /** New <link> nodes each time so Chrome’s tab UI actually picks up the data URL. */
   function installManagedLinks(dataUrl) {
     if (!document.head || !dataUrl) return;
 
-    var link = document.getElementById(MANAGED_LINK_ID);
-    if (!link) {
-      link = document.createElement('link');
-      link.id = MANAGED_LINK_ID;
-      link.setAttribute('data-tab-aging-managed', 'true');
-      link.setAttribute('rel', 'shortcut icon');
-      link.setAttribute('type', 'image/png');
-      link.setAttribute('sizes', '32x32');
-      document.head.appendChild(link);
-    }
+    removeManagedFavicon();
 
-    var link2 = document.getElementById(MANAGED_LINK_ID_2);
-    if (!link2) {
-      link2 = document.createElement('link');
-      link2.id = MANAGED_LINK_ID_2;
-      link2.setAttribute('data-tab-aging-managed', 'true');
-      link2.setAttribute('rel', 'icon');
-      link2.setAttribute('type', 'image/png');
-      link2.setAttribute('sizes', '32x32');
-      document.head.appendChild(link2);
-    }
+    var link = document.createElement('link');
+    link.id = MANAGED_LINK_ID;
+    link.setAttribute('data-tab-aging-managed', 'true');
+    link.setAttribute('rel', 'shortcut icon');
+    link.setAttribute('type', 'image/png');
+    link.setAttribute('sizes', '32x32');
+    link.href = dataUrl;
+    document.head.appendChild(link);
+
+    var link2 = document.createElement('link');
+    link2.id = MANAGED_LINK_ID_2;
+    link2.setAttribute('data-tab-aging-managed', 'true');
+    link2.setAttribute('rel', 'icon');
+    link2.setAttribute('type', 'image/png');
+    link2.setAttribute('sizes', '32x32');
+    link2.href = dataUrl;
+    document.head.appendChild(link2);
 
     ensureFaviconHeadObserver();
-    link.href = dataUrl;
-    link2.href = dataUrl;
     pinManagedFaviconLast();
     logd('composite favicon applied');
   }
@@ -445,7 +466,7 @@
     var level = msg.level != null ? msg.level : U.getAgeLevel(ageDays, msg.settings.agingThresholds);
 
     latestState = {
-      settings: msg.settings,
+      settings: U.normalizeSettings(msg.settings || {}),
       ageDays: ageDays,
       level: level,
       pageUrl: msg.pageUrl || '',
