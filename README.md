@@ -15,15 +15,19 @@ All state is **local** (`chrome.storage.local`). No backend.
 - **Age** is `floor((now - lastSeenAt) / AGING_UNIT_MS)` — in production that unit is one **day** (`86400000` ms); see fast test mode below.
 - **Focusing a tab** sets `lastSeenAt` to now, so **age resets to 0** for that URL key while you are on it.
 - **Other open tabs** keep their own `lastSeenAt`; when you switch away, their favicons/titles refresh to reflect **their** staleness.
-- A **`chrome.alarms`** tick runs **cleanup** and **refreshes visuals** on open tabs (every **24 hours** in production, **every minute** while fast test mode is on).
+- A **`chrome.alarms`** tick runs **cleanup** and **refreshes visuals** on open tabs (repeating **24h** in production; in fast test, a **30s** chained one-shot alarm).
 
 ### Fast test mode (development)
 
-In **`utils.js`**, `FAST_TEST_MODE` is currently **`true`**: each threshold step uses **one minute** instead of one day, and the alarm runs **every minute** so background tabs update without waiting. Set **`FAST_TEST_MODE`** to **`false`** and reload the extension for real-world behavior. After changing the flag, reload the extension on `chrome://extensions` so the alarm schedule updates.
+In **`utils.js`**, `FAST_TEST_MODE` is currently **`true`**: each threshold step uses **30 seconds** instead of one day, and the background schedules the next tick **every 30 seconds** so background tabs update quickly. Set **`FAST_TEST_MODE`** to **`false`** and reload the extension for real-world behavior. Reload the extension on `chrome://extensions` after changing the flag so alarms reset.
+
+### Seeing favicon / title changes
+
+The tab you are **actively using** is always treated as **fresh** (age 0), so its favicon stays normal. To verify aging, open **at least two** http(s) tabs, stay on one for **30+ seconds**, then look at the **other** tab’s icon/title (or switch away and back). Check the page console (F12) for `[Tab Aging] favicon overlay applied level N` on the background tab when the alarm runs.
 
 ## Title markers (when enabled)
 
-| Age (days, or minutes in fast test mode) | Marker |
+| Age (days, or 30s steps in fast test mode) | Marker |
 |------------|--------|
 | 0 | _(none)_ |
 | 1–3 | 🔸 |

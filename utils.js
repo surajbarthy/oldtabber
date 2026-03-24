@@ -7,12 +7,14 @@
   'use strict';
 
   /**
-   * When true: one “aging unit” = 1 minute and the background alarm runs every minute.
-   * Set to false for production (real days + one alarm per 24h).
+   * When true: one “aging unit” = 30 seconds and a chained alarm fires every 30s (see background.js).
+   * Set to false for production (real calendar days + one repeating alarm per 24h).
    */
   var FAST_TEST_MODE = true;
-  var AGING_UNIT_MS = FAST_TEST_MODE ? 60 * 1000 : 86400000;
-  var ALARM_PERIOD_MINUTES = FAST_TEST_MODE ? 1 : 24 * 60;
+  var AGING_UNIT_MS = FAST_TEST_MODE ? 30 * 1000 : 86400000;
+  /** Chained one-shot alarms use fractional minutes (0.5 = 30s). Not used when FAST_TEST_MODE is false. */
+  var FAST_TEST_ALARM_DELAY_MINUTES = 0.5;
+  var ALARM_PERIOD_MINUTES_PROD = 24 * 60;
 
   /** Default aging boundaries (days in prod, minutes when FAST_TEST_MODE): bumps at 1, 4, 8, 15+ */
   var DEFAULT_THRESHOLDS = [1, 4, 8, 15];
@@ -100,7 +102,8 @@
   global.TabAgingUtils = {
     FAST_TEST_MODE: FAST_TEST_MODE,
     AGING_UNIT_MS: AGING_UNIT_MS,
-    ALARM_PERIOD_MINUTES: ALARM_PERIOD_MINUTES,
+    FAST_TEST_ALARM_DELAY_MINUTES: FAST_TEST_ALARM_DELAY_MINUTES,
+    ALARM_PERIOD_MINUTES_PROD: ALARM_PERIOD_MINUTES_PROD,
     DEFAULT_THRESHOLDS: DEFAULT_THRESHOLDS,
     isTrackableUrl: isTrackableUrl,
     normalizeUrl: normalizeUrl,

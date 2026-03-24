@@ -3,7 +3,7 @@
  *
  * Permissions (see manifest.json):
  * - storage: persist pages + settings in chrome.storage.local
- * - alarms: periodic tick to refresh aging visuals on open tabs + cleanup (1 min in fast test mode)
+ * - alarms: refresh + cleanup (30s chained delay in fast test, daily period in prod)
  * - tabs: read tab URLs and active state for “seen” + broadcast visuals
  * - scripting: inject content scripts when sendMessage fails (e.g. pre-injection race)
  * - host_permissions http(s)/*: required to inject/read normal web pages
@@ -16,6 +16,17 @@ importScripts('utils.js');
   var U = self.TabAgingUtils;
   var ALARM_DAILY = 'tab-aging-daily';
   var STORAGE_MS = 180 * 86400000; /* cleanup entries older than this */
+
+  /** Fast test uses one-shot alarms every 30s (0.5 min); prod uses repeating 24h alarm. */
+  function scheduleAgingAlarm() {
+    chrome.alarms.clear(ALARM_DAILY, function () {
+      if (U.FAST_TEST_MODE) {
+        chrome.alarms.create(ALARM_DAILY, { delayInMinutes: U.FAST_TEST_ALARM_DELAY_MINUTES });
+      } else {
+        chrome.alarms.create(ALARM_DAILY, { periodInMinutes: U.ALARM_PERIOD_MINUTES_PROD });
+      }
+    });
+  }
 
   async function getState() {
     var data = await chrome.storage.local.get(['pages', 'settings']);
@@ -171,28 +182,38 @@ importScripts('utils.js');
   chrome.alarms.onAlarm.addListener(function (alarm) {
     if (alarm.name !== ALARM_DAILY) return;
     (async function () {
-      var state = await getState();
-      state.pages = await cleanupOldPages(state.pages);
-      await saveState({ pages: state.pages });
-      await refreshAllTabsVisuals();
-    })().catch(function (e) {
-      console.debug('[Tab Aging] alarm', e);
-    });
+      try {
+        var state = await getState();
+        state.pages = await cleanupOldPages(state.pages);
+        await saveState({ pages: state.pages });
+        await refreshAllTabsVisuals();
+      } catch (e) {
+        console.debug('[Tab Aging] alarm', e);
+      } finally {
+        if (U.FAST_TEST_MODE) {
+          chrome.alarms.create(ALARM_DAILY, { delayInMinutes: U.FAST_TEST_ALARM_DELAY_MINUTES });
+        }
+      }
+    })();
   });
 
   chrome.runtime.onInstalled.addListener(function () {
     (async function () {
       var state = await getState();
       await saveState({ settings: state.settings, pages: state.pages });
-      chrome.alarms.create(ALARM_DAILY, { periodInMinutes: U.ALARM_PERIOD_MINUTES });
-      console.debug('[Tab Aging] installed / updated; alarm period (min):', U.ALARM_PERIOD_MINUTES);
+      scheduleAgingAlarm();
+      console.debug(
+        '[Tab Aging] installed / updated; fast mode:',
+        U.FAST_TEST_MODE,
+        U.FAST_TEST_MODE ? 'delay min ' + U.FAST_TEST_ALARM_DELAY_MINUTES : 'period min ' + U.ALARM_PERIOD_MINUTES_PROD
+      );
     })().catch(function (e) {
       console.debug('[Tab Aging] onInstalled', e);
     });
   });
 
   chrome.runtime.onStartup.addListener(function () {
-    chrome.alarms.create(ALARM_DAILY, { periodInMinutes: U.ALARM_PERIOD_MINUTES });
+    scheduleAgingAlarm();
   });
 
   chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {

@@ -9,7 +9,9 @@
   if (!U) return;
 
   var DATA_ORIGINAL_TITLE = 'tabAgingOriginalTitle';
-  var DATA_RESTORED_FAVICON = 'tabAgingRestoredHref';
+  var DYNAMIC_FAVICON_ID = 'tab-aging-favicon-dynamic';
+  var lastFaviconLevel = 0;
+  var headObserver = null;
 
   function logDebug(msg, err) {
     if (err) console.debug('[Tab Aging]', msg, err);
@@ -57,9 +59,34 @@
   }
 
   function findIconLinks() {
-    return Array.prototype.slice.call(
+    var all = Array.prototype.slice.call(
       document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]')
     );
+    return all.filter(function (el) {
+      return el.id !== DYNAMIC_FAVICON_ID && el.id !== DYNAMIC_FAVICON_ID + '-2';
+    });
+  }
+
+  function pinOurFaviconLast() {
+    var head = document.head;
+    if (!head) return;
+    var a = document.getElementById(DYNAMIC_FAVICON_ID);
+    var b = document.getElementById(DYNAMIC_FAVICON_ID + '-2');
+    if (a) head.appendChild(a);
+    if (b) head.appendChild(b);
+  }
+
+  function ensureHeadObserver() {
+    if (headObserver || !document.head) return;
+    var t = null;
+    headObserver = new MutationObserver(function () {
+      if (lastFaviconLevel <= 0) return;
+      if (t) clearTimeout(t);
+      t = setTimeout(function () {
+        pinOurFaviconLast();
+      }, 100);
+    });
+    headObserver.observe(document.head, { childList: true, subtree: false });
   }
 
   /**
@@ -101,7 +128,9 @@
       }
     }
 
-    var alphaMap = [0.12, 0.28, 0.52, 0.78, 0.92];
+    var alphaMap = U.FAST_TEST_MODE
+      ? [0.35, 0.55, 0.72, 0.88, 0.96]
+      : [0.12, 0.28, 0.52, 0.78, 0.92];
     var a = alphaMap[Math.min(level, 4)];
 
     ctx.fillStyle = 'rgba(220, 38, 38, ' + a + ')';
@@ -129,13 +158,21 @@
         return;
       }
       var img = new Image();
-      img.crossOrigin = 'anonymous';
+      try {
+        var abs = new URL(href, document.baseURI);
+        if (abs.origin !== window.location.origin) {
+          img.crossOrigin = 'anonymous';
+        }
+      } catch (e) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = function () {
         resolve(img);
       };
       img.onerror = function () {
         resolve(null);
       };
+      img.referrerPolicy = 'no-referrer';
       img.src = href;
     });
   }
@@ -154,26 +191,49 @@
     return sizes.length ? sizes[0].href : new URL('/favicon.ico', document.location.origin).href;
   }
 
+  /**
+   * Chrome often ignores in-place href updates on <link rel="icon">.
+   * Remove + append a fresh node and use shortcut icon + sizes so the tab strip picks it up.
+   */
   function ensureOverlayLink(dataUrl) {
-    if (!dataUrl) return;
-    var id = 'tab-aging-favicon-dynamic';
-    var existing = document.getElementById(id);
-    if (existing) {
-      existing.href = dataUrl;
-      return;
-    }
+    if (!dataUrl || !document.head) return;
+    var o1 = document.getElementById(DYNAMIC_FAVICON_ID);
+    var o2 = document.getElementById(DYNAMIC_FAVICON_ID + '-2');
+    if (o1) o1.remove();
+    if (o2) o2.remove();
+
     var link = document.createElement('link');
-    link.id = id;
-    link.rel = 'icon';
-    link.type = 'image/png';
+    link.id = DYNAMIC_FAVICON_ID;
+    link.setAttribute('rel', 'shortcut icon');
+    link.setAttribute('type', 'image/png');
+    link.setAttribute('sizes', '32x32');
     link.href = dataUrl;
     document.head.appendChild(link);
+
+    var alt = document.createElement('link');
+    alt.id = DYNAMIC_FAVICON_ID + '-2';
+    alt.setAttribute('rel', 'icon');
+    alt.setAttribute('type', 'image/png');
+    alt.setAttribute('sizes', '32x32');
+    alt.href = dataUrl;
+    document.head.appendChild(alt);
+
+    ensureHeadObserver();
+    pinOurFaviconLast();
+  }
+
+  function removeDynamicFavicons() {
+    var a = document.getElementById(DYNAMIC_FAVICON_ID);
+    var b = document.getElementById(DYNAMIC_FAVICON_ID + '-2');
+    if (a) a.remove();
+    if (b) b.remove();
+    lastFaviconLevel = 0;
   }
 
   async function applyFaviconOverlay(level) {
+    lastFaviconLevel = level;
     if (level <= 0) {
-      var dyn = document.getElementById('tab-aging-favicon-dynamic');
-      if (dyn) dyn.remove();
+      removeDynamicFavicons();
       return;
     }
 
@@ -182,7 +242,10 @@
     var img = await loadImageFromUrl(href);
     var dataUrl = drawBadgeFavicon(level, img);
     if (!dataUrl) dataUrl = drawBadgeFavicon(level, null);
-    if (dataUrl) ensureOverlayLink(dataUrl);
+    if (dataUrl) {
+      ensureOverlayLink(dataUrl);
+      logDebug('favicon overlay applied level ' + level);
+    }
   }
 
   function restoreAllVisuals() {
@@ -190,8 +253,7 @@
       var el = document.documentElement;
       var orig = el.getAttribute('data-' + DATA_ORIGINAL_TITLE);
       if (orig != null) document.title = orig;
-      var dyn = document.getElementById('tab-aging-favicon-dynamic');
-      if (dyn) dyn.remove();
+      removeDynamicFavicons();
     } catch (e) {
       logDebug('restore failed', e);
     }
@@ -218,8 +280,7 @@
     if (msg.settings.useFaviconOverlay) {
       await applyFaviconOverlay(level);
     } else {
-      var d = document.getElementById('tab-aging-favicon-dynamic');
-      if (d) d.remove();
+      removeDynamicFavicons();
     }
   }
 
