@@ -15,6 +15,7 @@ All state is **local** (`chrome.storage.local`). No backend.
 
 - **Native tab color** cannot be changed by extensions; only signals the page exposes (favicon + title) are under partial control.
 - **Drawing the site favicon from a page-loaded `<img>`** often **taints** the canvas. Tab Aging **fetches icon bytes in the service worker** (allowed by `host_permissions`), returns a **data URL** to the content script, then **draws + dot/tint + `toDataURL()`** — that path is **not cross-origin tainted**. If fetch fails, a neutral placeholder is composited instead.
+- **Upgrades from `useFaviconOverlay: false`**: an earlier build forced both dot and tint off permanently. Normalized settings now keep **default dot on** unless you saved the new toggles. Open the popup and toggle **Dot** / **Tint** once if favicons stay plain.
 - **SPAs** (Gmail, Calendar, etc.) may still **replace `<link rel="icon">` or `<title>`** after load. The content script **reapplies** state on a **short retry schedule**, **`visibilitychange`**, **`load`**, and a **debounced `MutationObserver` on `<head>`** so the badge/title come back without tight loops.
 
 ## How aging works
