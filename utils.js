@@ -32,14 +32,33 @@
   var MIN_STEP_GAP_MS = 60000;
 
   /**
-   * Default: show 🔸 after 1d idle, 🔶 after 4d, 🔴 after 8d, ⛔ after 15d (same as legacy [1,4,8,15] days).
+   * Product presets (Balanced is the default for new installs and “reset to defaults”).
    */
-  var DEFAULT_AGING_STEPS = [
-    { value: 1, unit: 'days' },
-    { value: 4, unit: 'days' },
-    { value: 8, unit: 'days' },
-    { value: 15, unit: 'days' },
-  ];
+  var MODE_PRESET_STEPS = {
+    balanced: [
+      { value: 30, unit: 'minutes' },
+      { value: 2, unit: 'hours' },
+      { value: 1, unit: 'days' },
+      { value: 3, unit: 'days' },
+    ],
+    focus: [
+      { value: 10, unit: 'minutes' },
+      { value: 30, unit: 'minutes' },
+      { value: 2, unit: 'hours' },
+      { value: 8, unit: 'hours' },
+    ],
+    chill: [
+      { value: 1, unit: 'hours' },
+      { value: 6, unit: 'hours' },
+      { value: 2, unit: 'days' },
+      { value: 7, unit: 'days' },
+    ],
+  };
+
+  /** @deprecated use MODE_PRESET_STEPS.balanced — kept for stable export name */
+  var DEFAULT_AGING_STEPS = MODE_PRESET_STEPS.balanced.map(function (s) {
+    return { value: s.value, unit: s.unit };
+  });
 
   function unitToMsMult(unit) {
     if (unit === 'minutes') return 60000;
@@ -54,17 +73,55 @@
   }
 
   function cloneDefaultSteps() {
-    return DEFAULT_AGING_STEPS.map(function (s) {
+    return MODE_PRESET_STEPS.balanced.map(function (s) {
       return { value: s.value, unit: s.unit };
     });
   }
 
+  function clonePresetSteps(presetId) {
+    var src = MODE_PRESET_STEPS[presetId];
+    if (!src) return cloneDefaultSteps();
+    return src.map(function (s) {
+      return { value: s.value, unit: s.unit };
+    });
+  }
+
+  /**
+   * Returns sanitized steps + thresholds for a named mode (balanced | focus | chill).
+   */
+  function applyPreset(presetId) {
+    return sanitizeAgingSteps(clonePresetSteps(presetId), null);
+  }
+
+  function thresholdsMsEqual(a, b) {
+    if (!a || !b || a.length !== 4 || b.length !== 4) return false;
+    for (var i = 0; i < 4; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Compare current steps to preset thresholds (after sanitize). Returns 'balanced' | 'focus' | 'chill' | 'custom'.
+   */
+  function getPresetNameFromAgingSteps(steps) {
+    if (!steps || !Array.isArray(steps) || steps.length !== 4) return 'custom';
+    var user = sanitizeAgingSteps(steps, null);
+    var ids = ['balanced', 'focus', 'chill'];
+    for (var i = 0; i < ids.length; i++) {
+      var ref = applyPreset(ids[i]);
+      if (thresholdsMsEqual(user.thresholdsMs, ref.thresholdsMs)) return ids[i];
+    }
+    return 'custom';
+  }
+
   function migrateLegacyThresholdsDays(arr) {
     if (!arr || arr.length !== 4) return null;
+    var fallbacks = [1, 4, 8, 15];
     var out = [];
     for (var i = 0; i < 4; i++) {
       var n = Math.max(1, Math.round(Number(arr[i])));
-      if (!isFinite(n)) n = DEFAULT_AGING_STEPS[i].value;
+      if (!isFinite(n)) n = fallbacks[i];
       out.push({ value: n, unit: 'days' });
     }
     return out;
@@ -247,6 +304,10 @@
     ALARM_PERIOD_MINUTES_PROD: ALARM_PERIOD_MINUTES_PROD,
     MIN_STEP_GAP_MS: MIN_STEP_GAP_MS,
     DEFAULT_AGING_STEPS: DEFAULT_AGING_STEPS,
+    MODE_PRESET_STEPS: MODE_PRESET_STEPS,
+    applyPreset: applyPreset,
+    getPresetNameFromAgingSteps: getPresetNameFromAgingSteps,
+    clonePresetSteps: clonePresetSteps,
     unitToMsMult: unitToMsMult,
     stepToMs: stepToMs,
     sanitizeAgingSteps: sanitizeAgingSteps,

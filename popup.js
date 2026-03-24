@@ -1,14 +1,19 @@
 /**
- * Tab Aging — toolbar popup: master switch + step timing (sliders / units).
+ * Tab Aging — toolbar popup: mode-first UX, collapsible advanced timing.
  */
 (function () {
   'use strict';
 
   var U = self.TabAgingUtils;
   var $enabled = document.getElementById('enabled');
-  var $resetThresholds = document.getElementById('resetThresholds');
+  var $customizeToggle = document.getElementById('customize-toggle');
+  var $advanced = document.getElementById('advanced-panel');
+  var $customBadge = document.getElementById('custom-badge');
+  var $resetModeDefaults = document.getElementById('resetModeDefaults');
+  var $resetTabTimers = document.getElementById('resetTabTimers');
   var $openOptions = document.getElementById('openOptions');
   var $status = document.getElementById('status');
+  var $pills = document.querySelectorAll('.mode-pill');
 
   var applyingFromSanitize = false;
   var saveTimer = null;
@@ -38,17 +43,13 @@
     try {
       for (var i = 0; i < 4; i++) {
         var s = steps[i];
-        var range = document.getElementById('tier-' + i + '-range');
         var num = document.getElementById('tier-' + i + '-num');
         var unit = document.getElementById('tier-' + i + '-unit');
         unit.value = s.unit;
         var mx = maxForUnit(s.unit);
-        range.max = String(mx);
         num.max = String(mx);
         num.min = '1';
-        range.min = '1';
         var v = Math.min(mx, Math.max(1, Math.round(Number(s.value))));
-        range.value = String(v);
         num.value = String(v);
       }
     } finally {
@@ -56,22 +57,28 @@
     }
   }
 
-  function syncRangeFromNum(i) {
-    var range = document.getElementById('tier-' + i + '-range');
+  function syncNumBounds(i) {
     var num = document.getElementById('tier-' + i + '-num');
     var unit = document.getElementById('tier-' + i + '-unit');
     var mx = maxForUnit(unit.value);
-    range.max = String(mx);
     num.max = String(mx);
     var v = Math.min(mx, Math.max(1, Math.round(Number(num.value)) || 1));
     num.value = String(v);
-    range.value = String(v);
   }
 
-  function syncNumFromRange(i) {
-    var range = document.getElementById('tier-' + i + '-range');
-    var num = document.getElementById('tier-' + i + '-num');
-    num.value = range.value;
+  function refreshModeUI() {
+    var steps = readFormSteps();
+    var name = U.getPresetNameFromAgingSteps(steps);
+    for (var p = 0; p < $pills.length; p++) {
+      var pill = $pills[p];
+      var id = pill.getAttribute('data-preset');
+      pill.classList.toggle('is-selected', id === name);
+    }
+    if (name === 'custom') {
+      $customBadge.classList.remove('is-hidden');
+    } else {
+      $customBadge.classList.add('is-hidden');
+    }
   }
 
   function onTierInputChanged() {
@@ -80,6 +87,7 @@
     var san = U.sanitizeAgingSteps(raw, null);
     applyStepsToForm(san.steps);
     scheduleSave(san.steps);
+    refreshModeUI();
   }
 
   function scheduleSave(steps) {
@@ -101,6 +109,33 @@
     setStatus('Saved');
     setTimeout(function () {
       setStatus('');
+    }, 1000);
+  }
+
+  function setAdvancedOpen(open) {
+    $customizeToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      $advanced.classList.remove('is-collapsed');
+      $advanced.removeAttribute('hidden');
+    } else {
+      $advanced.classList.add('is-collapsed');
+      $advanced.setAttribute('hidden', '');
+    }
+  }
+
+  /**
+   * Reset timing to current named mode, or Balanced when settings are Custom.
+   */
+  function resetToModeDefaults() {
+    var current = U.getPresetNameFromAgingSteps(readFormSteps());
+    var target = current === 'custom' ? 'balanced' : current;
+    var san = U.applyPreset(target);
+    applyStepsToForm(san.steps);
+    savePartial({ agingSteps: san.steps, useTitleMarkers: true });
+    refreshModeUI();
+    setStatus('Timing reset');
+    setTimeout(function () {
+      setStatus('');
     }, 1200);
   }
 
@@ -109,6 +144,7 @@
     var s = U.normalizeSettings(data.settings);
     $enabled.checked = !!s.enabled;
     applyStepsToForm(s.agingSteps);
+    refreshModeUI();
   }
 
   $enabled.addEventListener('change', function () {
@@ -117,36 +153,54 @@
 
   for (var t = 0; t < 4; t++) {
     (function (i) {
-      document.getElementById('tier-' + i + '-range').addEventListener('input', function () {
-        syncNumFromRange(i);
-        onTierInputChanged();
-      });
       document.getElementById('tier-' + i + '-num').addEventListener('input', function () {
-        syncRangeFromNum(i);
+        syncNumBounds(i);
         onTierInputChanged();
       });
       document.getElementById('tier-' + i + '-num').addEventListener('change', function () {
-        syncRangeFromNum(i);
+        syncNumBounds(i);
         onTierInputChanged();
       });
       document.getElementById('tier-' + i + '-unit').addEventListener('change', function () {
-        syncRangeFromNum(i);
+        syncNumBounds(i);
         onTierInputChanged();
       });
     })(t);
   }
 
-  $resetThresholds.addEventListener('click', function () {
-    var def = U.DEFAULT_AGING_STEPS.map(function (x) {
-      return { value: x.value, unit: x.unit };
+  for (var q = 0; q < $pills.length; q++) {
+    $pills[q].addEventListener('click', function () {
+      var preset = this.getAttribute('data-preset');
+      if (!preset) return;
+      var san = U.applyPreset(preset);
+      applyStepsToForm(san.steps);
+      savePartial({ agingSteps: san.steps, useTitleMarkers: true });
+      refreshModeUI();
+      setStatus('Mode applied');
+      setTimeout(function () {
+        setStatus('');
+      }, 900);
     });
-    var san = U.sanitizeAgingSteps(def, null);
-    applyStepsToForm(san.steps);
-    savePartial({ agingSteps: san.steps, useTitleMarkers: true });
-    setStatus('Timing reset');
-    setTimeout(function () {
-      setStatus('');
-    }, 1500);
+  }
+
+  $customizeToggle.addEventListener('click', function () {
+    var open = $customizeToggle.getAttribute('aria-expanded') !== 'true';
+    setAdvancedOpen(open);
+  });
+
+  $resetModeDefaults.addEventListener('click', function () {
+    resetToModeDefaults();
+  });
+
+  $resetTabTimers.addEventListener('click', function () {
+    if (!confirm('Clear last-focus times for every tab? Counters restart when you visit each tab again.')) return;
+    chrome.runtime.sendMessage({ type: 'TAB_AGING_RESET_PAGES' }, function (res) {
+      if (res && res.ok) setStatus('Tab timers cleared');
+      else setStatus('Could not reset — try reloading the extension');
+      setTimeout(function () {
+        setStatus('');
+      }, 2200);
+    });
   });
 
   $openOptions.addEventListener('click', function () {

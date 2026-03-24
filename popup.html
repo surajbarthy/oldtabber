@@ -10,250 +10,98 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        color-scheme: dark;
-        --bg: #141416;
-        --surface: #1a1a1e;
-        --text: #f4f4f5;
-        --muted: #9ca3af;
-        --border: #2a2a30;
-        --link: #60a5fa;
-        --accent: #f97316;
-        --accent-dim: rgba(249, 115, 22, 0.35);
-      }
-      * {
-        box-sizing: border-box;
-      }
-      html {
-        background: var(--bg);
-      }
-      body {
-        width: 320px;
-        max-height: 580px;
-        overflow-x: hidden;
-        overflow-y: auto;
-        margin: 0;
-        padding: 14px 14px 12px;
-        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-        font-size: 13px;
-        color: var(--text);
-        background: var(--bg);
-        -webkit-font-smoothing: antialiased;
-      }
-      h1 {
-        font-size: 15px;
-        font-weight: 600;
-        margin: 0 0 12px;
-        letter-spacing: -0.02em;
-        color: var(--text);
-      }
-      .row {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--border);
-      }
-      .row label {
-        cursor: pointer;
-        line-height: 1.35;
-        flex: 1;
-      }
-      .hint {
-        display: block;
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 3px;
-        font-weight: 400;
-      }
-      input[type='checkbox'] {
-        margin-top: 2px;
-        flex-shrink: 0;
-        width: 1.15rem;
-        height: 1.15rem;
-        border-radius: 4px;
-        accent-color: var(--accent);
-        cursor: pointer;
-      }
-      .section {
-        padding-top: 4px;
-      }
-      .section-title {
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin: 14px 0 6px;
-      }
-      .section > .hint {
-        margin: 0 0 8px;
-        line-height: 1.4;
-      }
-      .tier {
-        padding: 10px 0;
-        border-bottom: 1px solid var(--border);
-      }
-      .tier:last-of-type {
-        border-bottom: none;
-      }
-      .tier-head {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 8px;
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .tier-emoji {
-        font-size: 1.05rem;
-        line-height: 1;
-      }
-      .tier-range {
-        width: 100%;
-        margin: 0 0 8px;
-        accent-color: var(--accent);
-      }
-      .tier-inline {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .tier-inline input[type='number'] {
-        font: inherit;
-        width: 3.5rem;
-        padding: 5px 6px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--surface);
-        color: var(--text);
-      }
-      .tier-inline select {
-        font: inherit;
-        flex: 1;
-        min-width: 0;
-        padding: 5px 8px;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--surface);
-        color: var(--text);
-      }
-      .btn-quiet {
-        margin-top: 10px;
-        width: 100%;
-        font: inherit;
-        font-size: 12px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--muted);
-        cursor: pointer;
-      }
-      .btn-quiet:hover {
-        color: var(--text);
-        border-color: var(--accent-dim);
-      }
-      .footer {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--border);
-      }
-      button.linkish {
-        background: none;
-        border: none;
-        color: var(--link);
-        cursor: pointer;
-        font: inherit;
-        font-size: 12px;
-        padding: 0;
-        text-decoration: underline;
-        text-underline-offset: 2px;
-      }
-      button.linkish:hover {
-        color: #93c5fd;
-      }
-      .status {
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 8px;
-        min-height: 14px;
-      }
-    </style>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <h1>Tab Aging</h1>
+    <header class="topbar">
+      <h1>Tab Aging</h1>
+    </header>
 
-    <div class="row">
-      <label for="enabled">
-        Extension on
-        <span class="hint">Master switch.</span>
-      </label>
-      <input type="checkbox" id="enabled" />
+    <div class="enable-row">
+      <span class="enable-label" id="enable-label">Extension on</span>
+      <input type="checkbox" id="enabled" aria-labelledby="enable-label" />
     </div>
 
-    <div class="section">
-      <div class="section-title">Step timing</div>
-      <p class="hint">
-        Idle time before each title emoji. Each step must be after the one above (values adjust automatically).
+    <p class="tagline">Choose how quickly tabs start to feel forgotten.</p>
+
+    <div class="mode-block">
+      <div class="mode-row">
+        <span class="eyebrow">Mode</span>
+        <span id="custom-badge" class="custom-badge is-hidden" aria-live="polite">Custom</span>
+      </div>
+      <div class="mode-pills" role="group" aria-label="Attention decay mode">
+        <button type="button" class="mode-pill" data-preset="balanced">Balanced</button>
+        <button type="button" class="mode-pill" data-preset="focus">Focus</button>
+        <button type="button" class="mode-pill" data-preset="chill">Chill</button>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="disclosure"
+      id="customize-toggle"
+      aria-expanded="false"
+      aria-controls="advanced-panel"
+    >
+      <span>Customize timing</span>
+      <span class="chevron" aria-hidden="true">▾</span>
+    </button>
+
+    <div id="advanced-panel" class="advanced is-collapsed" hidden>
+      <p class="advanced-hint">
+        Each level happens later than the one before it. Values adjust automatically.
       </p>
 
-      <div class="tier" data-tier="0">
-        <div class="tier-head">
+      <div class="tier-row" data-tier="0">
+        <div class="tier-meta">
           <span class="tier-emoji" aria-hidden="true">🔸</span>
-          <span>Level 1</span>
+          <span class="tier-name">Level 1</span>
         </div>
-        <input type="range" class="tier-range" id="tier-0-range" min="1" max="365" value="1" aria-label="Level 1 amount" />
-        <div class="tier-inline">
-          <input type="number" id="tier-0-num" min="1" max="365" value="1" aria-label="Level 1 value" />
+        <div class="tier-fields">
+          <input type="number" id="tier-0-num" min="1" step="1" value="30" aria-label="Level 1 value" />
           <select id="tier-0-unit" aria-label="Level 1 unit">
             <option value="minutes">Minutes</option>
             <option value="hours">Hours</option>
-            <option value="days" selected>Days</option>
+            <option value="days">Days</option>
           </select>
         </div>
       </div>
-      <div class="tier" data-tier="1">
-        <div class="tier-head">
+      <div class="tier-row" data-tier="1">
+        <div class="tier-meta">
           <span class="tier-emoji" aria-hidden="true">🔶</span>
-          <span>Level 2</span>
+          <span class="tier-name">Level 2</span>
         </div>
-        <input type="range" class="tier-range" id="tier-1-range" min="1" max="365" value="4" />
-        <div class="tier-inline">
-          <input type="number" id="tier-1-num" min="1" max="365" value="4" />
-          <select id="tier-1-unit">
+        <div class="tier-fields">
+          <input type="number" id="tier-1-num" min="1" step="1" value="2" aria-label="Level 2 value" />
+          <select id="tier-1-unit" aria-label="Level 2 unit">
             <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-            <option value="days" selected>Days</option>
+            <option value="hours" selected>Hours</option>
+            <option value="days">Days</option>
           </select>
         </div>
       </div>
-      <div class="tier" data-tier="2">
-        <div class="tier-head">
+      <div class="tier-row" data-tier="2">
+        <div class="tier-meta">
           <span class="tier-emoji" aria-hidden="true">🔴</span>
-          <span>Level 3</span>
+          <span class="tier-name">Level 3</span>
         </div>
-        <input type="range" class="tier-range" id="tier-2-range" min="1" max="365" value="8" />
-        <div class="tier-inline">
-          <input type="number" id="tier-2-num" min="1" max="365" value="8" />
-          <select id="tier-2-unit">
+        <div class="tier-fields">
+          <input type="number" id="tier-2-num" min="1" step="1" value="1" aria-label="Level 3 value" />
+          <select id="tier-2-unit" aria-label="Level 3 unit">
             <option value="minutes">Minutes</option>
             <option value="hours">Hours</option>
             <option value="days" selected>Days</option>
           </select>
         </div>
       </div>
-      <div class="tier" data-tier="3">
-        <div class="tier-head">
+      <div class="tier-row" data-tier="3">
+        <div class="tier-meta">
           <span class="tier-emoji" aria-hidden="true">⛔</span>
-          <span>Level 4</span>
+          <span class="tier-name">Level 4</span>
         </div>
-        <input type="range" class="tier-range" id="tier-3-range" min="1" max="365" value="15" />
-        <div class="tier-inline">
-          <input type="number" id="tier-3-num" min="1" max="365" value="15" />
-          <select id="tier-3-unit">
+        <div class="tier-fields">
+          <input type="number" id="tier-3-num" min="1" step="1" value="3" aria-label="Level 4 value" />
+          <select id="tier-3-unit" aria-label="Level 4 unit">
             <option value="minutes">Minutes</option>
             <option value="hours">Hours</option>
             <option value="days" selected>Days</option>
@@ -261,13 +109,15 @@
         </div>
       </div>
 
-      <button type="button" class="btn-quiet" id="resetThresholds">Reset timing to defaults</button>
+      <button type="button" class="btn-reset-timing" id="resetModeDefaults">Reset to mode defaults</button>
     </div>
 
-    <div class="footer">
-      <button type="button" class="linkish" id="openOptions">Reset tab timers &amp; other options…</button>
-      <p class="status" id="status" aria-live="polite"></p>
-    </div>
+    <hr class="divider" />
+
+    <button type="button" class="btn-reset-tabs" id="resetTabTimers">Reset all tab timers</button>
+    <button type="button" class="link-footer" id="openOptions">Extension settings</button>
+
+    <p class="status" id="status" aria-live="polite"></p>
 
     <script src="utils.js"></script>
     <script src="popup.js"></script>
