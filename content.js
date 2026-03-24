@@ -109,6 +109,10 @@
       if (!latestState || latestState.level <= 0 || !wantsFaviconEffects(latestState.settings)) return;
       if (t) clearTimeout(t);
       t = setTimeout(function () {
+        /* latestState may be cleared (navigate, disable) before this debounced run. */
+        if (!latestState || latestState.level <= 0 || !wantsFaviconEffects(latestState.settings)) {
+          return;
+        }
         pinManagedFaviconLast();
         var el = document.getElementById(MANAGED_LINK_ID);
         var h = el ? el.getAttribute('href') || '' : '';
