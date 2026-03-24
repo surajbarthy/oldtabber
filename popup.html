@@ -4,85 +4,176 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Tab Aging</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        color-scheme: light dark;
-        --text: #1a1a1e;
-        --muted: #5c5c66;
-        --border: #d8d8dc;
-        --card: #fff;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --text: #f2f2f4;
-          --muted: #a0a0ab;
-          --border: #3a3a42;
-          --card: #252529;
-        }
+        color-scheme: dark;
+        --bg: #141416;
+        --surface: #1a1a1e;
+        --text: #f4f4f5;
+        --muted: #9ca3af;
+        --border: #2a2a30;
+        --link: #60a5fa;
+        --accent: #f97316;
+        --accent-dim: rgba(249, 115, 22, 0.35);
       }
       * {
         box-sizing: border-box;
       }
+      html {
+        background: var(--bg);
+      }
       body {
-        width: 300px;
+        width: 320px;
+        max-height: 580px;
+        overflow-x: hidden;
+        overflow-y: auto;
         margin: 0;
-        padding: 12px 14px 14px;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        padding: 14px 14px 12px;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         font-size: 13px;
         color: var(--text);
-        background: var(--card);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
       }
       h1 {
         font-size: 15px;
-        font-weight: 650;
-        margin: 0 0 10px;
+        font-weight: 600;
+        margin: 0 0 12px;
         letter-spacing: -0.02em;
+        color: var(--text);
       }
       .row {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        gap: 10px;
-        padding: 8px 0;
+        gap: 12px;
+        padding: 10px 0;
         border-bottom: 1px solid var(--border);
       }
-      .row:last-of-type {
-        border-bottom: none;
-      }
-      label {
+      .row label {
         cursor: pointer;
         line-height: 1.35;
+        flex: 1;
       }
       .hint {
         display: block;
         font-size: 11px;
         color: var(--muted);
-        margin-top: 2px;
+        margin-top: 3px;
         font-weight: 400;
       }
       input[type='checkbox'] {
         margin-top: 2px;
         flex-shrink: 0;
-        accent-color: #c62828;
+        width: 1.15rem;
+        height: 1.15rem;
+        border-radius: 4px;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+      .section {
+        padding-top: 4px;
+      }
+      .section-title {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 14px 0 6px;
+      }
+      .section > .hint {
+        margin: 0 0 8px;
+        line-height: 1.4;
+      }
+      .tier {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .tier:last-of-type {
+        border-bottom: none;
+      }
+      .tier-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .tier-emoji {
+        font-size: 1.05rem;
+        line-height: 1;
+      }
+      .tier-range {
+        width: 100%;
+        margin: 0 0 8px;
+        accent-color: var(--accent);
+      }
+      .tier-inline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tier-inline input[type='number'] {
+        font: inherit;
+        width: 3.5rem;
+        padding: 5px 6px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .tier-inline select {
+        font: inherit;
+        flex: 1;
+        min-width: 0;
+        padding: 5px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .btn-quiet {
+        margin-top: 10px;
+        width: 100%;
+        font: inherit;
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .btn-quiet:hover {
+        color: var(--text);
+        border-color: var(--accent-dim);
       }
       .footer {
         margin-top: 12px;
-        padding-top: 10px;
+        padding-top: 12px;
         border-top: 1px solid var(--border);
       }
       button.linkish {
         background: none;
         border: none;
-        color: #2563eb;
+        color: var(--link);
         cursor: pointer;
         font: inherit;
+        font-size: 12px;
         padding: 0;
         text-decoration: underline;
+        text-underline-offset: 2px;
       }
-      @media (prefers-color-scheme: dark) {
-        button.linkish {
-          color: #93c5fd;
-        }
+      button.linkish:hover {
+        color: #93c5fd;
       }
       .status {
         font-size: 11px;
@@ -102,16 +193,79 @@
       </label>
       <input type="checkbox" id="enabled" />
     </div>
-    <div class="row">
-      <label for="emoji">
-        Emoji in title
-        <span class="hint">🔸 … ⛔ prefix on the tab title.</span>
-      </label>
-      <input type="checkbox" id="emoji" />
+
+    <div class="section">
+      <div class="section-title">Step timing</div>
+      <p class="hint">
+        Idle time before each title emoji. Each step must be after the one above (values adjust automatically).
+      </p>
+
+      <div class="tier" data-tier="0">
+        <div class="tier-head">
+          <span class="tier-emoji" aria-hidden="true">🔸</span>
+          <span>Level 1</span>
+        </div>
+        <input type="range" class="tier-range" id="tier-0-range" min="1" max="365" value="1" aria-label="Level 1 amount" />
+        <div class="tier-inline">
+          <input type="number" id="tier-0-num" min="1" max="365" value="1" aria-label="Level 1 value" />
+          <select id="tier-0-unit" aria-label="Level 1 unit">
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days" selected>Days</option>
+          </select>
+        </div>
+      </div>
+      <div class="tier" data-tier="1">
+        <div class="tier-head">
+          <span class="tier-emoji" aria-hidden="true">🔶</span>
+          <span>Level 2</span>
+        </div>
+        <input type="range" class="tier-range" id="tier-1-range" min="1" max="365" value="4" />
+        <div class="tier-inline">
+          <input type="number" id="tier-1-num" min="1" max="365" value="4" />
+          <select id="tier-1-unit">
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days" selected>Days</option>
+          </select>
+        </div>
+      </div>
+      <div class="tier" data-tier="2">
+        <div class="tier-head">
+          <span class="tier-emoji" aria-hidden="true">🔴</span>
+          <span>Level 3</span>
+        </div>
+        <input type="range" class="tier-range" id="tier-2-range" min="1" max="365" value="8" />
+        <div class="tier-inline">
+          <input type="number" id="tier-2-num" min="1" max="365" value="8" />
+          <select id="tier-2-unit">
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days" selected>Days</option>
+          </select>
+        </div>
+      </div>
+      <div class="tier" data-tier="3">
+        <div class="tier-head">
+          <span class="tier-emoji" aria-hidden="true">⛔</span>
+          <span>Level 4</span>
+        </div>
+        <input type="range" class="tier-range" id="tier-3-range" min="1" max="365" value="15" />
+        <div class="tier-inline">
+          <input type="number" id="tier-3-num" min="1" max="365" value="15" />
+          <select id="tier-3-unit">
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days" selected>Days</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="button" class="btn-quiet" id="resetThresholds">Reset timing to defaults</button>
     </div>
 
     <div class="footer">
-      <button type="button" class="linkish" id="openOptions">All options & thresholds…</button>
+      <button type="button" class="linkish" id="openOptions">Reset tab timers &amp; other options…</button>
       <p class="status" id="status" aria-live="polite"></p>
     </div>
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Aging",
-  "version": "1.2.7",
+  "version": "1.2.9",
   "description": "Idle-tab urgency: optional title emoji by how long since you last used each tab. MV3, local-only.",
   "permissions": [
     "storage",
@@ -10,6 +10,9 @@
     "scripting"
   ],
   "host_permissions": ["http://*/*", "https://*/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Tab Aging"

@@ -234,6 +234,8 @@
     o.agingThresholdsMs = san.thresholdsMs;
     delete o.agingThresholds;
 
+    o.useTitleMarkers = true;
+
     return o;
   }
 

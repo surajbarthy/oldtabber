@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Tab Aging — Options</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         color-scheme: light dark;
@@ -14,6 +20,7 @@
         --muted: #5c5c66;
         --accent: #c62828;
         --accent-soft: rgba(198, 40, 40, 0.12);
+        --link: #2563eb;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -23,13 +30,14 @@
           --text: #f2f2f4;
           --muted: #a0a0ab;
           --accent-soft: rgba(239, 83, 80, 0.18);
+          --link: #93c5fd;
         }
       }
       * {
         box-sizing: border-box;
       }
       body {
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         margin: 0;
         padding: 2rem 1.5rem 3rem;
         background: var(--bg);
@@ -39,7 +47,7 @@
       }
       h1 {
         font-size: 1.35rem;
-        font-weight: 650;
+        font-weight: 600;
         margin: 0 0 0.25rem;
         letter-spacing: -0.02em;
       }
@@ -47,6 +55,9 @@
         color: var(--muted);
         font-size: 0.9rem;
         margin-bottom: 1.75rem;
+      }
+      .sub a {
+        color: var(--link);
       }
       .card {
         background: var(--card);
@@ -86,71 +97,6 @@
         width: 1.1rem;
         height: 1.1rem;
         accent-color: var(--accent);
-      }
-      .tier-card h2 {
-        font-size: 1rem;
-        font-weight: 650;
-        margin: 0 0 0.35rem;
-      }
-      .tier {
-        padding: 0.85rem 0;
-        border-bottom: 1px solid var(--border);
-      }
-      .tier:last-of-type {
-        border-bottom: none;
-        padding-bottom: 0;
-      }
-      .tier:first-of-type {
-        padding-top: 0.25rem;
-      }
-      .tier-head {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-bottom: 0.55rem;
-        font-size: 0.95rem;
-        font-weight: 600;
-      }
-      .tier-emoji {
-        font-size: 1.15rem;
-        line-height: 1;
-      }
-      .tier-controls {
-        display: grid;
-        grid-template-columns: 1fr auto auto;
-        gap: 0.65rem 0.75rem;
-        align-items: center;
-      }
-      @media (max-width: 28rem) {
-        .tier-controls {
-          grid-template-columns: 1fr;
-        }
-      }
-      .tier-controls input[type='range'] {
-        width: 100%;
-        grid-column: 1 / -1;
-        accent-color: var(--accent);
-      }
-      .tier-controls input[type='number'] {
-        font: inherit;
-        width: 4.25rem;
-        padding: 0.35rem 0.45rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--card);
-        color: var(--text);
-      }
-      .tier-controls select {
-        font: inherit;
-        padding: 0.35rem 0.5rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--card);
-        color: var(--text);
-        min-width: 6.5rem;
-      }
-      .tier-reset {
-        margin-top: 1rem;
       }
       .actions {
         margin-top: 1.25rem;
@@ -192,7 +138,11 @@
   </head>
   <body>
     <h1>Tab Aging</h1>
-    <p class="sub">Each tab ages on its own (same URL in two tabs = two timers). Optional emoji in the title shows how long since you last used that tab. Use the toolbar popup for quick toggles.</p>
+    <p class="sub">
+      Step timing and title emoji live in the
+      <strong>toolbar menu</strong> (extension icon). This page is for the master switch, clearing
+      per-tab timers, and other housekeeping.
+    </p>
 
     <div class="card">
       <div class="row">
@@ -202,84 +152,6 @@
         </label>
         <input type="checkbox" id="enabled" />
       </div>
-      <div class="row">
-        <label for="title">
-          Title markers (emoji)
-          <span class="hint">Show 🔸 → ⛔ in the title by how long the tab has been idle.</span>
-        </label>
-        <input type="checkbox" id="title" />
-      </div>
-    </div>
-
-    <div class="card tier-card">
-      <h2>Emoji step timing</h2>
-      <p class="hint" style="margin: 0 0 0.75rem">
-        Each row is when that emoji appears (idle time since you last focused the tab). Steps must
-        happen in order — if a value would be earlier than the row above, it is adjusted automatically.
-      </p>
-
-      <div class="tier" data-tier="0">
-        <div class="tier-head">
-          <span class="tier-emoji" aria-hidden="true">🔸</span>
-          <span>Level 1</span>
-        </div>
-        <div class="tier-controls">
-          <input type="range" id="tier-0-range" min="1" max="365" value="1" aria-label="Level 1 amount" />
-          <input type="number" id="tier-0-num" min="1" max="365" value="1" />
-          <select id="tier-0-unit" aria-label="Level 1 unit">
-            <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-            <option value="days" selected>Days</option>
-          </select>
-        </div>
-      </div>
-      <div class="tier" data-tier="1">
-        <div class="tier-head">
-          <span class="tier-emoji" aria-hidden="true">🔶</span>
-          <span>Level 2</span>
-        </div>
-        <div class="tier-controls">
-          <input type="range" id="tier-1-range" min="1" max="365" value="4" />
-          <input type="number" id="tier-1-num" min="1" max="365" value="4" />
-          <select id="tier-1-unit">
-            <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-            <option value="days" selected>Days</option>
-          </select>
-        </div>
-      </div>
-      <div class="tier" data-tier="2">
-        <div class="tier-head">
-          <span class="tier-emoji" aria-hidden="true">🔴</span>
-          <span>Level 3</span>
-        </div>
-        <div class="tier-controls">
-          <input type="range" id="tier-2-range" min="1" max="365" value="8" />
-          <input type="number" id="tier-2-num" min="1" max="365" value="8" />
-          <select id="tier-2-unit">
-            <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-            <option value="days" selected>Days</option>
-          </select>
-        </div>
-      </div>
-      <div class="tier" data-tier="3">
-        <div class="tier-head">
-          <span class="tier-emoji" aria-hidden="true">⛔</span>
-          <span>Level 4</span>
-        </div>
-        <div class="tier-controls">
-          <input type="range" id="tier-3-range" min="1" max="365" value="15" />
-          <input type="number" id="tier-3-num" min="1" max="365" value="15" />
-          <select id="tier-3-unit">
-            <option value="minutes">Minutes</option>
-            <option value="hours">Hours</option>
-            <option value="days" selected>Days</option>
-          </select>
-        </div>
-      </div>
-
-      <button type="button" class="tier-reset" id="resetThresholds">Reset timing to defaults</button>
     </div>
 
     <div class="card actions">
@@ -290,7 +162,7 @@
       <p class="status" id="status" aria-live="polite"></p>
     </div>
 
-    <footer>Manifest V3 · <code>chrome.storage.local</code> · <code>chrome.alarms</code> (see README for test vs prod timing)</footer>
+    <footer>Manifest V3 · <code>chrome.storage.local</code></footer>
     <script src="utils.js"></script>
     <script src="options.js"></script>
   </body>
