@@ -1,0 +1,119 @@
+================================================================================
+  TAB AGING (oldtabber) — VERSION & WORK SUMMARY
+  Generated for reference / download. Manifest version as of this file: 1.2.9
+================================================================================
+
+OVERVIEW
+--------
+Chrome MV3 extension: idle-tab urgency via optional title emoji (and earlier
+iterations included favicon dot/tint). Aging is based on how long since you
+last focused each tab. Storage: chrome.storage.local. Per-tab tracking uses
+Chrome tab IDs so duplicate URLs age independently.
+
+
+CURRENT RELEASE (manifest.json)
+---------------------------------
+Version: 1.2.9
+
+• Toolbar popup: dark UI (near-black background, orange accents), master switch,
+  full “step timing” controls (four emoji levels: slider + number + Minutes /
+  Hours / Days), reset timing to defaults.
+• Options page: extension on/off + “reset all tracked tabs” only; copy points
+  users to the toolbar menu for timing.
+• Inter font via Google Fonts; manifest content_security_policy allows
+  fonts.googleapis.com / fonts.gstatic.com for extension pages.
+• Title emoji always on when extension is enabled (useTitleMarkers forced true
+  in normalizeSettings).
+
+
+VERSION-STYLE MILESTONES (chronological)
+----------------------------------------
+
+1.2.9 (released in git as commit 64fd478)
+  - Inter font + CSP for Google Fonts on popup/options.
+  - Headings use font-weight 600 (Inter weight ladder).
+
+1.2.8 (between 1.2.7 and 1.2.9; bundled into same push as 1.2.9 work)
+  - Step timing moved from options page into toolbar popup.
+  - Dark popup styling aligned with design reference; removed separate
+    “emoji in title” toggle from popup.
+  - Options simplified; timing lives in popup only.
+
+1.2.7 (git: f6c5bcf — “Release v1.2.7…”)
+  - Title-only product direction: favicon dot/tint gated off via
+    FAVICON_EFFECTS_ENABLED; removed from popup/options until a future release.
+  - Per-tab aging: storage keys tab:<id>; chrome.tabs.onRemoved clears records;
+    migrated away from URL-only keys so two tabs with the same URL behave
+    separately.
+  - Wall-clock thresholds: settings.agingSteps [{ value, unit }] with
+    unit ∈ { minutes, hours, days }; derived agingThresholdsMs; strict
+    ordering between tiers (minimum gap enforced in sanitizeAgingSteps).
+  - Background payload uses idleMs + level (replaces ageDays bucket model).
+  - FAST_TEST_MODE default false; background refresh alarm interval shortened
+    for prod (e.g. 5-minute ticks) so short thresholds still update.
+  - Content script: acknowledge APPLY_AGE_STATE immediately (sendResponse) and
+    apply visuals async — avoids one slow tab blocking all tabs / alarm chain.
+
+1.2.6 / 1.2.5 / 1.2.4 (engineering fixes shipped around the 1.2.7 commit;
+    intermediate manifest bumps described in development)
+  - 1.2.4: Debounced MutationObserver paths snapshot latestState end-to-end
+    to fix TOCTOU / null .level (favicon + title).
+  - 1.2.5: Immediate response to APPLY_AGE_STATE so service worker is not
+    blocked on favicon fetch / image decode per tab.
+  - 1.2.6: Title-only defaults + per-tab keys (rolled into 1.2.7 release
+    narrative above).
+
+
+GIT HISTORY (recent commits, newest first)
+------------------------------------------
+64fd478  Release v1.2.9: dark popup UI, timing in toolbar, Inter font
+f6c5bcf  Release v1.2.7: title-only aging, per-tab keys, configurable emoji timing
+fbee0aa  fix: snapshot latestState in observer debounces (re-entrancy / TOCTOU)
+5492b5b  fix: null latestState in favicon MutationObserver debounce
+386eac2  fix: opaque favicon composite + SW/alarm wake + bg tab onUpdated
+ea7daf2  docs: note overlay migration and favicon toggle hint
+2a61348  fix: favicon dot/tint missing — settings migration, normalize payload
+24a331b  feat: popup menu; separate dot/tint/title; composite favicon
+20b6014  fix: visible favicon badge — dual link rel, observer null href
+9abc964  refactor: generated favicon badge, reapplies, hardened inject/skip
+52e8083  fix: fetch favicons in service worker to avoid canvas taint
+6392c7f  docs: options copy for favicon dot
+ba82832  feat: favicon uses growing red dot only, no full tint
+aa8f210  fix: re-apply title markers when SPAs overwrite document.title
+4e072a5  fix: favicon refresh + 30s fast-test ticks
+5041878  chore: fast test mode — 1 min alarm and minute-based aging units
+c99b486  feat: Tab Aging Chrome extension (Manifest V3)
+
+
+EARLIER PRODUCT EVOLUTION (pre–1.2.7 single release)
+----------------------------------------------------
+• Initial MV3 extension with storage, alarms, content script for favicon
+  composite + title markers.
+• Favicon: service worker fetch to data URL → untainted canvas; growing red dot
+  by level; optional tint; dual <link rel> for Chrome tab icon updates.
+• Title: optional emoji prefix by age level; MutationObserver on <head> to
+  fight SPA title overwrites.
+• Popup/options toggles for extension, dot, tint, title (later trimmed).
+• Background: markPageSeen, sendAgeToTab, inject when messaging fails,
+  refreshAllTabsVisuals, options-changed / reset-pages messages.
+
+
+KEY FILES
+---------
+manifest.json     — version, permissions, CSP (fonts), content_scripts
+background.js     — state, tab events, alarms, messaging, inject
+content.js        — title markers, favicon composite (when enabled)
+utils.js          — thresholds, sanitizeAgingSteps, idle ms → level, settings
+popup.html/js     — primary UI: master switch + step timing
+options.html/js   — extension toggle + reset tracked tabs
+
+
+REMOTE
+------
+Repository (typical): https://github.com/surajbarthy/oldtabber
+
+
+================================================================================
+End of summary — copy or download this file from the repo root:
+  TAB_AGING_VERSION_HISTORY.txt
+================================================================================
