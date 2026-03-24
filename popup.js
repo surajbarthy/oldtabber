@@ -1,5 +1,5 @@
 /**
- * Tab Aging — options page: read/write settings and notify background.
+ * Tab Aging — toolbar popup: quick toggles (same settings as options page).
  */
 (function () {
   'use strict';
@@ -8,13 +8,12 @@
   var $enabled = document.getElementById('enabled');
   var $dot = document.getElementById('dot');
   var $tint = document.getElementById('tint');
-  var $title = document.getElementById('title');
-  var $thresholdsLabel = document.getElementById('thresholdsLabel');
-  var $reset = document.getElementById('resetPages');
+  var $emoji = document.getElementById('emoji');
+  var $openOptions = document.getElementById('openOptions');
   var $status = document.getElementById('status');
 
-  function setStatus(text) {
-    $status.textContent = text || '';
+  function setStatus(t) {
+    $status.textContent = t || '';
   }
 
   async function load() {
@@ -23,8 +22,7 @@
     $enabled.checked = !!s.enabled;
     $dot.checked = !!s.useFaviconDot;
     $tint.checked = !!s.useFaviconTint;
-    $title.checked = !!s.useTitleMarkers;
-    $thresholdsLabel.textContent = (s.agingThresholds || U.DEFAULT_THRESHOLDS).join(', ');
+    $emoji.checked = !!s.useTitleMarkers;
   }
 
   async function savePartial(patch) {
@@ -34,13 +32,11 @@
     await chrome.storage.local.set({ settings: s });
     try {
       await chrome.runtime.sendMessage({ type: 'TAB_AGING_OPTIONS_CHANGED' });
-    } catch (e) {
-      /* background may be sleeping */
-    }
-    setStatus('Saved.');
+    } catch (e) {}
+    setStatus('Saved');
     setTimeout(function () {
       setStatus('');
-    }, 2000);
+    }, 1200);
   }
 
   $enabled.addEventListener('change', function () {
@@ -52,23 +48,16 @@
   $tint.addEventListener('change', function () {
     savePartial({ useFaviconTint: $tint.checked });
   });
-  $title.addEventListener('change', function () {
-    savePartial({ useTitleMarkers: $title.checked });
+  $emoji.addEventListener('change', function () {
+    savePartial({ useTitleMarkers: $emoji.checked });
   });
 
-  $reset.addEventListener('click', function () {
-    if (!confirm('Clear all tracked pages? Aging will restart from when you next focus each tab.')) return;
-    chrome.runtime.sendMessage({ type: 'TAB_AGING_RESET_PAGES' }, function (res) {
-      if (res && res.ok) setStatus('All page records cleared.');
-      else setStatus('Could not reset (try reloading the extension).');
-      setTimeout(function () {
-        setStatus('');
-      }, 3000);
-    });
+  $openOptions.addEventListener('click', function () {
+    chrome.runtime.openOptionsPage();
   });
 
   load().catch(function (e) {
-    console.debug('[Tab Aging] options load', e);
-    setStatus('Failed to load settings.');
+    console.debug('[Tab Aging] popup load', e);
+    setStatus('Could not load settings.');
   });
 })();

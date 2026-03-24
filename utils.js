@@ -114,9 +114,29 @@
     return {
       enabled: true,
       useTitleMarkers: true,
-      useFaviconOverlay: true,
+      /** Corner dot drawn on top of the site favicon (after SW fetch → data URL). */
+      useFaviconDot: true,
+      /** Semi-transparent red wash on top of the site favicon. */
+      useFaviconTint: false,
       agingThresholds: DEFAULT_THRESHOLDS.slice(),
     };
+  }
+
+  /**
+   * Merge saved settings with defaults; migrate legacy useFaviconOverlay → dot+tint when needed.
+   */
+  function normalizeSettings(raw) {
+    var s = raw && typeof raw === 'object' ? raw : {};
+    var o = Object.assign(defaultSettings(), s);
+    if (Object.prototype.hasOwnProperty.call(s, 'useFaviconOverlay')) {
+      var hasDot = Object.prototype.hasOwnProperty.call(s, 'useFaviconDot');
+      var hasTint = Object.prototype.hasOwnProperty.call(s, 'useFaviconTint');
+      if (!hasDot && !hasTint) {
+        o.useFaviconDot = !!s.useFaviconOverlay;
+        o.useFaviconTint = !!s.useFaviconOverlay;
+      }
+    }
+    return o;
   }
 
   global.TabAgingUtils = {
@@ -134,5 +154,6 @@
     getTitleMarker: getTitleMarker,
     getTitleMarkerForLevel: getTitleMarkerForLevel,
     defaultSettings: defaultSettings,
+    normalizeSettings: normalizeSettings,
   };
 })(typeof self !== 'undefined' ? self : globalThis);

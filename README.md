@@ -4,16 +4,17 @@ A **Chrome extension (Manifest V3)** that makes tabs feel like an “impossible 
 
 Because **Chrome does not allow extensions to paint native tab backgrounds**, Tab Aging instead:
 
-- **Sets a generated favicon badge** (transparent canvas, colored dot/badge by age level — no site icon bitmap), and optionally  
-- **Prepends small markers to `document.title`** (which usually appears on the tab strip).
+- **Composites the real favicon** (bytes fetched in the service worker → data URL, then drawn on a canvas) with optional **corner dot** and/or **red tint** by age level, and optionally  
+- **Prepends emoji markers to `document.title`**.
+
+Use the **toolbar popup** (click the extension icon) to toggle extension on/off, **dot**, **tint**, and **title emoji** independently. Full options (thresholds, reset) stay on the options page.
 
 All state is **local** (`chrome.storage.local`). No backend.
 
 ## Why some sites were failing before
 
 - **Native tab color** cannot be changed by extensions; only signals the page exposes (favicon + title) are under partial control.
-- **Drawing the site’s real favicon on a canvas** often fails in practice: cross-origin images **taint** the canvas, so **`toDataURL()` throws** or behavior is inconsistent. Fetching bytes in the service worker helped some cases but still depended on servers, SVG vs raster, and Chrome’s favicon pipeline.
-- **This MVP** uses a **fully generated** PNG (data URL) — no site bitmap — so **CORS/taint does not apply** and the badge is **consistent across sites**.
+- **Drawing the site favicon from a page-loaded `<img>`** often **taints** the canvas. Tab Aging **fetches icon bytes in the service worker** (allowed by `host_permissions`), returns a **data URL** to the content script, then **draws + dot/tint + `toDataURL()`** — that path is **not cross-origin tainted**. If fetch fails, a neutral placeholder is composited instead.
 - **SPAs** (Gmail, Calendar, etc.) may still **replace `<link rel="icon">` or `<title>`** after load. The content script **reapplies** state on a **short retry schedule**, **`visibilitychange`**, **`load`**, and a **debounced `MutationObserver` on `<head>`** so the badge/title come back without tight loops.
 
 ## How aging works
@@ -48,17 +49,14 @@ The tab you are **actively using** is always treated as **fresh** (age 0), so it
 
 Thresholds are configurable in storage as `settings.agingThresholds` (default `[1, 4, 8, 15]`). The options page **displays** them; editing numbers can be done via storage for now.
 
-## Favicon badge levels (generated)
+## Favicon (composite on site icon)
 
-Badges are drawn **in the center** of a 32×32 canvas so they stay visible after Chrome scales the tab icon (corner-only graphics often looked like “nothing changed”).
+| Setting | Effect |
+|--------|--------|
+| **Dot** | Corner badge on top of the decoded favicon; size grows with age level. |
+| **Tint** | Semi-transparent red rectangle over the whole icon; strength grows with level. |
 
-| Level | Appearance |
-|-------|------------|
-| 0 | _(managed links removed; site default)_ |
-| 1 | Small orange dot |
-| 2 | Larger orange–red dot |
-| 3 | Red badge + stronger ring |
-| 4 | Strong red + white “!” |
+You can enable **dot only**, **tint only**, or **both**. If both are off, only title markers apply (when enabled).
 
 ## Load unpacked in Chrome
 
@@ -86,8 +84,9 @@ Internal schemes (`chrome://`, `edge://`, `about:`, `chrome-extension://`, `devt
 | `manifest.json` | MV3 entry, permissions, service worker, content scripts, options UI. |
 | `utils.js` | URL guards, age/level, `DEBUG`, defaults (shared). |
 | `background.js` | Service worker: alarms, tab events, storage, messaging, inject + retry. |
-| `content.js` | Generated favicon, title markers, reapplies, observers. |
-| `options.html` / `options.js` | Toggle features, show thresholds, reset tracked pages. |
+| `content.js` | Favicon composite + title markers, reapplies, observers. |
+| `popup.html` / `popup.js` | Toolbar menu: master + dot + tint + emoji toggles. |
+| `options.html` / `options.js` | Same toggles + thresholds + reset tracked pages. |
 | `README.md` | This document. |
 
 ## Data model
@@ -102,7 +101,8 @@ Internal schemes (`chrome://`, `edge://`, `about:`, `chrome-extension://`, `devt
   "settings": {
     "enabled": true,
     "useTitleMarkers": true,
-    "useFaviconOverlay": true,
+    "useFaviconDot": true,
+    "useFaviconTint": false,
     "agingThresholds": [1, 4, 8, 15]
   }
 }
@@ -122,7 +122,7 @@ Entries whose `lastSeenAt` is older than **180 days** are removed on the daily a
 
 ## Manual test checklist
 
-1. **Normal static site** (e.g. `https://example.com`): open two tabs, age one in the background; confirm **generated badge** + optional title marker on the stale tab; active tab clean.
+1. **Normal static site** (e.g. `https://example.com`): open two tabs, age one in the background; confirm **dot/tint on real favicon** (popup toggles) + optional title marker on the stale tab; active tab clean.
 2. **SPA** (e.g. Google Calendar): after navigation or delayed title/icon changes, confirm badge/title **reappear** after retries or tab focus (`visibilitychange`).
 3. **Restricted URL** (`chrome://extensions`, `file://`): extension should **not** inject; no errors spamming the page console.
 4. **Tab visible again**: switch away and back; stale tabs should **refresh** visuals.

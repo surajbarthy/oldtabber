@@ -6,8 +6,7 @@
  * - alarms: periodic refresh + stale-entry cleanup (fast-test chain vs 24h prod)
  * - tabs: read tab URLs / active state for “seen” and push APPLY_AGE_STATE
  * - scripting: inject utils.js + content.js when sendMessage fails (no content script yet)
- * - host_permissions http(s)/*: required so chrome.scripting.executeScript can run on normal sites
- *   (Chrome will not inject into chrome:// etc. even with broad hosts; we still skip those URLs.)
+ * - host_permissions http(s)/*: inject scripts + fetch favicon bytes in worker (no page CORS taint on canvas)
  */
 importScripts('utils.js');
 
@@ -17,6 +16,64 @@ importScripts('utils.js');
   var U = self.TabAgingUtils;
   var ALARM_DAILY = 'tab-aging-daily';
   var STORAGE_MS = 180 * 86400000; /* cleanup entries older than this */
+
+  function blobToDataUrl(blob) {
+    return new Promise(function (resolve) {
+      var fr = new FileReader();
+      fr.onloadend = function () {
+        resolve(typeof fr.result === 'string' ? fr.result : null);
+      };
+      fr.onerror = function () {
+        resolve(null);
+      };
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  async function fetchFaviconAsDataUrl(href) {
+    if (!href || typeof href !== 'string') return null;
+    try {
+      var u = new URL(href);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    } catch (e) {
+      return null;
+    }
+    try {
+      var r = await fetch(href, {
+        credentials: 'omit',
+        redirect: 'follow',
+        cache: 'force-cache',
+      });
+      if (!r.ok) return null;
+      var ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (ct.indexOf('text/html') === 0) return null;
+      var blob = await r.blob();
+      if (!blob || blob.size === 0) return null;
+      if (blob.size > 512 * 1024) return null;
+      return await blobToDataUrl(blob);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function fetchFaviconWithFallbacks(href, pageOrigin) {
+    var seen = {};
+    var urls = [];
+    function add(u) {
+      if (!u || seen[u]) return;
+      seen[u] = true;
+      urls.push(u);
+    }
+    add(href);
+    try {
+      if (pageOrigin) add(new URL('/favicon.ico', pageOrigin).href);
+    } catch (e) {}
+    for (var i = 0; i < urls.length; i++) {
+      var d = await fetchFaviconAsDataUrl(urls[i]);
+      if (d) return d;
+    }
+    return null;
+  }
 
   function logd() {
     if (!U.DEBUG) return;
@@ -38,7 +95,7 @@ importScripts('utils.js');
   async function getState() {
     var data = await chrome.storage.local.get(['pages', 'settings']);
     var pages = data.pages && typeof data.pages === 'object' ? data.pages : {};
-    var settings = Object.assign(U.defaultSettings(), data.settings || {});
+    var settings = U.normalizeSettings(data.settings);
     return { pages: pages, settings: settings };
   }
 
@@ -253,6 +310,15 @@ importScripts('utils.js');
         sendResponse({ ok: true });
       })().catch(function () {
         sendResponse({ ok: false });
+      });
+      return true;
+    }
+    if (message && message.type === 'TAB_AGING_GET_FAVICON_DATA') {
+      (async function () {
+        var dataUrl = await fetchFaviconWithFallbacks(message.href, message.origin);
+        sendResponse({ dataUrl: dataUrl });
+      })().catch(function () {
+        sendResponse({ dataUrl: null });
       });
       return true;
     }

@@ -1,6 +1,6 @@
 /**
- * Tab Aging — content script: generated favicon badge + optional title markers.
- * Reliability: no site favicon fetch/draw (avoids CORS canvas taint). Plain canvas → data URL only.
+ * Tab Aging — content script: composite favicon (site icon + optional tint + dot) + title markers.
+ * Favicon bytes come from the service worker (data URL) so canvas stays untainted; tint/dot draw on top.
  */
 (function () {
   'use strict';
@@ -16,7 +16,6 @@
   var faviconHeadObserver = null;
   var applyingTitle = false;
 
-  /** Last successful APPLY_AGE_STATE snapshot for reapplies (visibility, retries, DOM). */
   var latestState = null;
   var reapplyDebounceTimer = null;
   var reapplySeriesTimers = [];
@@ -25,6 +24,10 @@
     if (!U.DEBUG) return;
     var a = ['[Tab Aging]'].concat(Array.prototype.slice.call(arguments));
     console.debug.apply(console, a);
+  }
+
+  function wantsFaviconEffects(settings) {
+    return !!(settings && (settings.useFaviconDot || settings.useFaviconTint));
   }
 
   var TITLE_MARKERS = ['\uD83D\uDD38', '\uD83D\uDD36', '\uD83D\uDD34', '\u26D4'];
@@ -101,18 +104,16 @@
     if (faviconHeadObserver || !document.head) return;
     var t = null;
     faviconHeadObserver = new MutationObserver(function () {
-      if (!latestState || latestState.level <= 0 || !latestState.settings.useFaviconOverlay) return;
+      if (!latestState || latestState.level <= 0 || !wantsFaviconEffects(latestState.settings)) return;
       if (t) clearTimeout(t);
       t = setTimeout(function () {
         pinManagedFaviconLast();
         var el = document.getElementById(MANAGED_LINK_ID);
         var h = el ? el.getAttribute('href') || '' : '';
         if (!el || h.indexOf('data:') !== 0) {
-          try {
-            applyManagedFaviconLevel(latestState.level);
-          } catch (e) {
+          applyManagedFaviconComposite(latestState.level, latestState.settings).catch(function (e) {
             logd('favicon reapply after head mutation failed', e);
-          }
+          });
         }
       }, 120);
     });
@@ -128,11 +129,69 @@
     if (b) head.appendChild(b);
   }
 
+  function findIconLinks() {
+    var all = Array.prototype.slice.call(
+      document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]')
+    );
+    return all.filter(function (el) {
+      return (
+        el.id !== MANAGED_LINK_ID &&
+        el.id !== MANAGED_LINK_ID_2 &&
+        el.getAttribute('data-tab-aging-managed') !== 'true'
+      );
+    });
+  }
+
+  function pickBestIconHref(links) {
+    var sizes = [];
+    for (var i = 0; i < links.length; i++) {
+      var href = links[i].getAttribute('href');
+      if (!href) continue;
+      try {
+        sizes.push({ href: new URL(href, document.baseURI).href, el: links[i] });
+      } catch (e) {
+        sizes.push({ href: href, el: links[i] });
+      }
+    }
+    return sizes.length ? sizes[0].href : new URL('/favicon.ico', document.location.origin).href;
+  }
+
+  function requestFaviconDataUrlFromBackground(href, origin) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage(
+        { type: 'TAB_AGING_GET_FAVICON_DATA', href: href, origin: origin || window.location.origin },
+        function (res) {
+          if (chrome.runtime.lastError) {
+            resolve(null);
+            return;
+          }
+          resolve(res && res.dataUrl ? res.dataUrl : null);
+        }
+      );
+    });
+  }
+
+  function loadImageFromDataUrl(dataUrl) {
+    return new Promise(function (resolve) {
+      if (!dataUrl) {
+        resolve(null);
+        return;
+      }
+      var img = new Image();
+      img.onload = function () {
+        resolve(img);
+      };
+      img.onerror = function () {
+        resolve(null);
+      };
+      img.src = dataUrl;
+    });
+  }
+
   /**
-   * Pure generated badge — no site bitmap. Circle is **centered** so Chrome’s scaled-down
-   * tab icon still shows color (corner-only art was often invisible).
+   * Draw site favicon (or gray fallback), then optional red tint and/or corner dot on top.
    */
-  function generateBadgeFavicon(level) {
+  function compositeFaviconDataUrl(level, settings, baseImage) {
     if (level <= 0) return null;
     var size = 32;
     var canvas = document.createElement('canvas');
@@ -141,34 +200,51 @@
     var ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    ctx.clearRect(0, 0, size, size);
-
-    var radii = [0, 6, 9, 12, 14];
-    var r = radii[Math.min(level, 4)];
-    var cx = size / 2;
-    var cy = size / 2;
-
-    var fills = ['', '#fb923c', '#f97316', '#ef4444', '#b91c1c'];
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = fills[level] || '#dc2626';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-    ctx.lineWidth = level >= 3 ? 2.5 : 1.5;
-    ctx.stroke();
-
-    if (level >= 4) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 11px system-ui,Segoe UI,sans-serif';
+    var drew = false;
+    if (baseImage && baseImage.complete && baseImage.naturalWidth) {
+      try {
+        ctx.drawImage(baseImage, 0, 0, size, size);
+        drew = true;
+      } catch (e) {
+        drew = false;
+      }
+    }
+    if (!drew) {
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#666';
+      ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('!', cx, cy + 0.5);
+      ctx.fillText('\u00B7', size / 2, size / 2);
+    }
+
+    if (settings.useFaviconTint) {
+      var alphas = [0, 0.2, 0.34, 0.5, 0.64];
+      var a = alphas[Math.min(level, 4)];
+      ctx.fillStyle = 'rgba(220, 38, 38, ' + a + ')';
+      ctx.fillRect(0, 0, size, size);
+    }
+
+    if (settings.useFaviconDot) {
+      var radii = [0, 3.5, 4.8, 6.2, 7.5];
+      var r = radii[Math.min(level, 4)];
+      var margin = 2;
+      var cx = size - margin - r;
+      var cy = size - margin - r;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#b91c1c';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+      ctx.lineWidth = level >= 3 ? 1.5 : 1;
+      ctx.stroke();
     }
 
     try {
       return canvas.toDataURL('image/png');
     } catch (e) {
-      logd('generateBadgeFavicon toDataURL failed', e);
+      logd('composite toDataURL failed', e);
       return null;
     }
   }
@@ -184,18 +260,8 @@
     }
   }
 
-  function applyManagedFaviconLevel(level) {
-    if (level <= 0) {
-      removeManagedFavicon();
-      return;
-    }
-    var dataUrl = generateBadgeFavicon(level);
-    if (!dataUrl) {
-      logd('favicon apply failed, title-only fallback (no data URL)');
-      removeManagedFavicon();
-      return;
-    }
-    if (!document.head) return;
+  function installManagedLinks(dataUrl) {
+    if (!document.head || !dataUrl) return;
 
     var link = document.getElementById(MANAGED_LINK_ID);
     if (!link) {
@@ -223,7 +289,26 @@
     link.href = dataUrl;
     link2.href = dataUrl;
     pinManagedFaviconLast();
-    logd('managed favicon level', level);
+    logd('composite favicon applied');
+  }
+
+  async function applyManagedFaviconComposite(level, settings) {
+    if (level <= 0 || !wantsFaviconEffects(settings)) {
+      removeManagedFavicon();
+      return;
+    }
+    if (!document.head) return;
+
+    var href = pickBestIconHref(findIconLinks());
+    var fetched = await requestFaviconDataUrlFromBackground(href, window.location.origin);
+    var img = await loadImageFromDataUrl(fetched);
+    var out = compositeFaviconDataUrl(level, settings, img);
+    if (!out) {
+      logd('favicon composite failed, title-only fallback');
+      removeManagedFavicon();
+      return;
+    }
+    installManagedLinks(out);
   }
 
   function clearReapplySeries() {
@@ -238,7 +323,9 @@
     reapplyDebounceTimer = setTimeout(function () {
       reapplyDebounceTimer = null;
       if (latestState) {
-        applyAllFromLatest();
+        applyAllFromLatest().catch(function (e) {
+          logd('reapply failed', e);
+        });
       }
     }, 100);
   }
@@ -299,7 +386,7 @@
     }
   }
 
-  function applyAllFromLatest() {
+  async function applyAllFromLatest() {
     if (!latestState) return;
     var s = latestState.settings;
     if (!s.enabled) {
@@ -313,8 +400,8 @@
     applyTitleFromState(s, ageDays);
 
     try {
-      if (s.useFaviconOverlay) {
-        applyManagedFaviconLevel(level);
+      if (wantsFaviconEffects(s)) {
+        await applyManagedFaviconComposite(level, s);
       } else {
         removeManagedFavicon();
       }
@@ -347,11 +434,11 @@
   }
 
   function handleApplyMessage(msg) {
-    if (!msg || msg.type !== 'APPLY_AGE_STATE') return;
+    if (!msg || msg.type !== 'APPLY_AGE_STATE') return Promise.resolve();
 
     if (!msg.settings || !msg.settings.enabled) {
       restoreAllVisuals();
-      return;
+      return Promise.resolve();
     }
 
     var ageDays = msg.ageDays | 0;
@@ -368,20 +455,21 @@
       logd('applying level', level, 'to', latestState.pageUrl);
     }
 
-    applyAllFromLatest();
     scheduleReapplySeries();
+    return applyAllFromLatest();
   }
 
   chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
     if (message && message.type === 'APPLY_AGE_STATE') {
-      try {
-        handleApplyMessage(message);
-        sendResponse({ ok: true });
-      } catch (e) {
-        logd('handleApplyMessage error', e);
-        sendResponse({ ok: false });
-      }
-      return false;
+      handleApplyMessage(message)
+        .then(function () {
+          sendResponse({ ok: true });
+        })
+        .catch(function (e) {
+          logd('handleApplyMessage error', e);
+          sendResponse({ ok: false });
+        });
+      return true;
     }
   });
 

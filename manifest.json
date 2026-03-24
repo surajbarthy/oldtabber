@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tab Aging",
-  "version": "1.1.1",
-  "description": "Idle-tab urgency via generated favicon badges and optional title markers (MV3, local-only). http/https only.",
+  "version": "1.2.0",
+  "description": "Idle-tab urgency: dot/tint on favicon + optional title emoji. Toolbar popup + options. MV3, local-only.",
   "permissions": [
     "storage",
     "alarms",
@@ -10,6 +10,10 @@
     "scripting"
   ],
   "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Tab Aging"
+  },
   "background": {
     "service_worker": "background.js"
   },

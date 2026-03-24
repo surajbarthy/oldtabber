@@ -138,7 +138,7 @@
   </head>
   <body>
     <h1>Tab Aging</h1>
-    <p class="sub">Idle tabs look more urgent — a generated favicon badge (no site icon read) and optional title markers. All data stays on your device.</p>
+    <p class="sub">Idle tabs look more urgent — dot and/or tint on the real favicon (fetched safely) plus optional title emoji. Use the toolbar popup for quick toggles.</p>
 
     <div class="card">
       <div class="row">
@@ -149,15 +149,22 @@
         <input type="checkbox" id="enabled" />
       </div>
       <div class="row">
-        <label for="favicon">
-          Favicon badge
-          <span class="hint">Canvas-generated badge by age level (reliable on most sites).</span>
+        <label for="dot">
+          Dot on favicon
+          <span class="hint">Corner badge drawn on top of the site icon (per age level).</span>
         </label>
-        <input type="checkbox" id="favicon" />
+        <input type="checkbox" id="dot" />
+      </div>
+      <div class="row">
+        <label for="tint">
+          Tint on favicon
+          <span class="hint">Semi-transparent red wash over the site icon.</span>
+        </label>
+        <input type="checkbox" id="tint" />
       </div>
       <div class="row">
         <label for="title">
-          Title markers
+          Title markers (emoji)
           <span class="hint">Prepend 🔸 → ⛔ by age (see README).</span>
         </label>
         <input type="checkbox" id="title" />
