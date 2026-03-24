@@ -220,12 +220,22 @@
     var canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    var ctx = canvas.getContext('2d');
+    var ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return null;
+
+    /**
+     * Fully opaque matte first. Icons with alpha leave “holes” in the bitmap stack in some
+     * browsers; opaque raster/JPEG favicons sit on a solid base so tint + dot always stack
+     * visibly the same way as on transparent PNGs.
+     */
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, size, size);
 
     var drew = false;
     if (baseImage && baseImage.complete && baseImage.naturalWidth) {
       try {
+        ctx.globalCompositeOperation = 'source-over';
         ctx.drawImage(baseImage, 0, 0, size, size);
         drew = true;
       } catch (e) {
@@ -233,7 +243,7 @@
       }
     }
     if (!drew) {
-      ctx.fillStyle = '#e8e8e8';
+      ctx.fillStyle = '#e5e7eb';
       ctx.fillRect(0, 0, size, size);
       ctx.fillStyle = '#666';
       ctx.font = 'bold 14px sans-serif';
@@ -242,13 +252,23 @@
       ctx.fillText('\u00B7', size / 2, size / 2);
     }
 
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
     if (settings.useFaviconTint === true) {
-      var alphas = [0, 0.28, 0.42, 0.55, 0.68];
+      var alphas = [0, 0.34, 0.48, 0.6, 0.74];
       var a = alphas[Math.min(level, 4)];
-      ctx.fillStyle = 'rgba(220, 38, 38, ' + a + ')';
+      ctx.fillStyle = 'rgba(185, 28, 28, ' + a + ')';
       ctx.fillRect(0, 0, size, size);
+      /* Darken/warm opaque artwork so tint reads on saturated icons (multiply is cheap). */
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = 'rgba(255, 140, 140, 0.4)';
+      ctx.fillRect(0, 0, size, size);
+      ctx.globalCompositeOperation = 'source-over';
     }
+    ctx.restore();
 
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
     if (settings.useFaviconDot === true) {
       var radii = [0, 4.5, 6, 7.5, 9];
       var r = radii[Math.min(level, 4)];
@@ -259,10 +279,11 @@
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fillStyle = '#b91c1c';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-      ctx.lineWidth = level >= 3 ? 1.5 : 1;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = level >= 3 ? 2 : 1.25;
       ctx.stroke();
     }
+    ctx.restore();
 
     try {
       return canvas.toDataURL('image/png');

@@ -117,6 +117,8 @@ Entries whose `lastSeenAt` is older than **180 days** are removed on the daily a
 
 ## Known limitations
 
+- **Opaque vs transparent favicons** are composited on a **light matte** so tint/dot stack predictably; tint uses **multiply** as a second pass so busy/opaque icons still read as “aged.”
+- **Service worker sleep**: alarms are **re-registered** when the worker starts if missing; **background tab** navigations call `sendAgeToTab` on `complete` (not only the active tab).
 - **Discarded / unloaded tabs** may not run content scripts until loaded again.
 - **Per-tab vs per-URL**: State is per **normalized URL**; two tabs on the same path share one `lastSeenAt`.
 - **Favicon**: If a tab strip still ignores a data-URL `link` (rare), **title markers** remain the fallback when enabled.

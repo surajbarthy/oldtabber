@@ -138,6 +138,12 @@ importScripts('utils.js');
     await saveState({ pages: state.pages });
   }
 
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
   function computeAgeWithSettings(pages, settings, url, nowMs) {
     var key = pageKeyFromUrl(url);
     if (!key) return { ageDays: 0, level: 0 };
@@ -158,17 +164,33 @@ importScripts('utils.js');
       return;
     }
 
+    var disabledPayload = {
+      type: 'APPLY_AGE_STATE',
+      ageDays: 0,
+      level: 0,
+      settings: settings,
+      pageUrl: url,
+    };
+
     if (!settings.enabled) {
-      try {
-        await chrome.tabs.sendMessage(tabId, {
-          type: 'APPLY_AGE_STATE',
-          ageDays: 0,
-          level: 0,
-          settings: settings,
-          pageUrl: url,
-        });
-      } catch (e) {
-        /* tab may not have injectable script */
+      var inj0 = false;
+      for (var d = 0; d < 4; d++) {
+        try {
+          await chrome.tabs.sendMessage(tabId, disabledPayload);
+          return;
+        } catch (e) {
+          if (!inj0) {
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['utils.js', 'content.js'],
+              });
+              logd('injected tab', tabId, '(disabled payload)');
+            } catch (e2) {}
+            inj0 = true;
+          }
+          await sleep(90 + d * 80);
+        }
       }
       return;
     }
@@ -185,20 +207,28 @@ importScripts('utils.js');
 
     logd('applying level', comp.level, 'to', url);
 
-    try {
-      await chrome.tabs.sendMessage(tabId, payload);
-    } catch (e) {
+    var injected = false;
+    for (var attempt = 0; attempt < 4; attempt++) {
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          files: ['utils.js', 'content.js'],
-        });
-        logd('injected content script for tab', tabId);
         await chrome.tabs.sendMessage(tabId, payload);
-      } catch (e2) {
-        logd('sendMessage failed after inject', tabId, (e2 && e2.message) || e2);
+        return;
+      } catch (e) {
+        if (!injected) {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: tabId },
+              files: ['utils.js', 'content.js'],
+            });
+            logd('injected content script for tab', tabId);
+            injected = true;
+          } catch (e2) {
+            logd('inject failed', tabId, (e2 && e2.message) || e2);
+          }
+        }
+        await sleep(100 + attempt * 90);
       }
     }
+    logd('sendAgeToTab gave up after retries', tabId);
   }
 
   async function refreshAllTabsVisuals() {
@@ -243,16 +273,26 @@ importScripts('utils.js');
     });
   });
 
+  /**
+   * Active tab: mark seen + refresh all tabs. Background tabs: still push age state once
+   * (otherwise new background loads stayed “cold” until you switched or the alarm fired).
+   */
   chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
     if (changeInfo.status !== 'complete') return;
-    if (!tab.active || !tab.url || !U.isTrackableUrl(tab.url)) return;
-    markPageSeen(tab.url)
-      .then(function () {
-        return onActiveTabContext(tabId);
-      })
-      .catch(function (e) {
+    if (!tab.url || !U.isTrackableUrl(tab.url)) return;
+    (async function () {
+      try {
+        if (tab.active) {
+          await markPageSeen(tab.url);
+          await onActiveTabContext(tabId);
+        } else {
+          var state = await getState();
+          await sendAgeToTab(tabId, tab.url, state.settings, state.pages);
+        }
+      } catch (e) {
         logd('onUpdated', e);
-      });
+      }
+    })();
   });
 
   chrome.alarms.onAlarm.addListener(function (alarm) {
@@ -292,6 +332,20 @@ importScripts('utils.js');
     scheduleAgingAlarm();
   });
 
+  /** Service worker restarts do not fire onStartup; re-arm alarm if Chrome dropped it. */
+  function ensureAlarmExists() {
+    chrome.alarms.get(ALARM_DAILY, function (alarm) {
+      if (chrome.runtime.lastError || !alarm) {
+        if (U.FAST_TEST_MODE) {
+          chrome.alarms.create(ALARM_DAILY, { delayInMinutes: U.FAST_TEST_ALARM_DELAY_MINUTES });
+        } else {
+          chrome.alarms.create(ALARM_DAILY, { periodInMinutes: U.ALARM_PERIOD_MINUTES_PROD });
+        }
+        logd('re-created alarm after worker wake');
+      }
+    });
+  }
+
   chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
     if (message && message.type === 'TAB_AGING_OPTIONS_CHANGED') {
       refreshAllTabsVisuals()
@@ -324,5 +378,6 @@ importScripts('utils.js');
     }
   });
 
+  ensureAlarmExists();
   refreshAllTabsVisuals().catch(function () {});
 })();
