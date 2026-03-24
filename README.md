@@ -94,7 +94,7 @@ Entries whose `lastSeenAt` is older than **180 days** are removed on the daily a
 ## Known limitations
 
 - **Favicon**: Many sites use **CORS**; reading the real favicon into a canvas may fail — the extension falls back to a **generated badge**.
-- **SPAs** that change `document.title` often may fight the title marker; the script tries to keep a single stored “original” title in a `data-*` attribute.
+- **SPAs** (Google Calendar, Gmail, etc.) change `<title>` often; a `MutationObserver` on `<head>` re-applies the emoji marker when the app overwrites the title.
 - **Discarded / unloaded tabs** may not run content scripts until loaded again.
 - **Per-tab vs per-URL**: State is per **normalized URL**; two tabs on the same path share one `lastSeenAt`.
 

@@ -12,6 +12,8 @@
   var DYNAMIC_FAVICON_ID = 'tab-aging-favicon-dynamic';
   var lastFaviconLevel = 0;
   var headObserver = null;
+  var titleHeadObserver = null;
+  var applyingTitle = false;
 
   function logDebug(msg, err) {
     if (err) console.debug('[Tab Aging]', msg, err);
@@ -45,7 +47,46 @@
     return base;
   }
 
+  function disconnectTitleObserver() {
+    if (titleHeadObserver) {
+      titleHeadObserver.disconnect();
+      titleHeadObserver = null;
+    }
+  }
+
+  /**
+   * SPAs (Google Calendar, Gmail, etc.) replace <title> after we run; re-apply marker when head/title mutates.
+   */
+  function ensureTitleMarkerObserver(marker) {
+    disconnectTitleObserver();
+    if (!marker || !document.head) return;
+    var debounceTimer = null;
+    titleHeadObserver = new MutationObserver(function () {
+      if (applyingTitle) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function () {
+        if (applyingTitle) return;
+        var cur = document.title;
+        if (cur.indexOf(marker) === 0) return;
+        applyingTitle = true;
+        try {
+          document.title = marker + ' ' + stripOurMarkers(cur);
+        } catch (e) {
+          logDebug('title reapply failed', e);
+        } finally {
+          applyingTitle = false;
+        }
+      }, 100);
+    });
+    titleHeadObserver.observe(document.head, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
+
   function applyTitle(marker, originalBase) {
+    applyingTitle = true;
     try {
       var base = originalBase != null ? originalBase : getOrCaptureOriginalTitle();
       if (!marker) {
@@ -55,6 +96,8 @@
       document.title = marker + ' ' + base;
     } catch (e) {
       logDebug('title update failed', e);
+    } finally {
+      applyingTitle = false;
     }
   }
 
@@ -254,6 +297,7 @@
       var orig = el.getAttribute('data-' + DATA_ORIGINAL_TITLE);
       if (orig != null) document.title = orig;
       removeDynamicFavicons();
+      disconnectTitleObserver();
     } catch (e) {
       logDebug('restore failed', e);
     }
@@ -270,10 +314,17 @@
     var ageDays = msg.ageDays | 0;
     var level = msg.level != null ? msg.level : U.getAgeLevel(ageDays, msg.settings.agingThresholds);
 
+    var marker = '';
     if (msg.settings.useTitleMarkers) {
-      var marker = U.getTitleMarker(ageDays, msg.settings.agingThresholds);
+      marker = U.getTitleMarker(ageDays, msg.settings.agingThresholds);
       applyTitle(marker, getOrCaptureOriginalTitle());
+      if (marker) {
+        ensureTitleMarkerObserver(marker);
+      } else {
+        disconnectTitleObserver();
+      }
     } else {
+      disconnectTitleObserver();
       applyTitle('', getOrCaptureOriginalTitle());
     }
 
