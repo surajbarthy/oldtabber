@@ -93,7 +93,7 @@ Entries whose `lastSeenAt` is older than **180 days** are removed on the daily a
 
 ## Known limitations
 
-- **Favicon**: Many sites use **CORS**; if the real icon cannot be drawn, we use a **neutral gray tile** with the same **growing red dot** so the badge still shows.
+- **Favicon**: The **service worker** `fetch`es the icon URL (using `host_permissions`), then the content script draws from a **data URL** so the canvas is not **cross-origin tainted** (the usual reason only one random site showed a badge before).
 - **SPAs** (Google Calendar, Gmail, etc.) change `<title>` often; a `MutationObserver` on `<head>` re-applies the emoji marker when the app overwrites the title.
 - **Discarded / unloaded tabs** may not run content scripts until loaded again.
 - **Per-tab vs per-URL**: State is per **normalized URL**; two tabs on the same path share one `lastSeenAt`.

@@ -235,6 +235,22 @@
     return sizes.length ? sizes[0].href : new URL('/favicon.ico', document.location.origin).href;
   }
 
+  /** Favicon bytes via service worker fetch — avoids canvas taint from cross-origin icons. */
+  function requestFaviconDataUrlFromBackground(href, origin) {
+    return new Promise(function (resolve) {
+      chrome.runtime.sendMessage(
+        { type: 'TAB_AGING_GET_FAVICON_DATA', href: href, origin: origin || window.location.origin },
+        function (res) {
+          if (chrome.runtime.lastError) {
+            resolve(null);
+            return;
+          }
+          resolve(res && res.dataUrl ? res.dataUrl : null);
+        }
+      );
+    });
+  }
+
   /**
    * Chrome often ignores in-place href updates on <link rel="icon">.
    * Remove + append a fresh node and use shortcut icon + sizes so the tab strip picks it up.
@@ -283,8 +299,16 @@
 
     var links = findIconLinks();
     var href = pickBestIconHref(links);
-    var img = await loadImageFromUrl(href);
-    var dataUrl = drawBadgeFavicon(level, img);
+    var fetchedDataUrl = await requestFaviconDataUrlFromBackground(href, window.location.origin);
+    var img = null;
+    if (fetchedDataUrl) {
+      img = await loadImageFromUrl(fetchedDataUrl);
+    }
+    if (!img || !img.complete || !img.naturalWidth) {
+      img = await loadImageFromUrl(href);
+    }
+
+    var dataUrl = drawBadgeFavicon(level, img && img.complete && img.naturalWidth ? img : null);
     if (!dataUrl) dataUrl = drawBadgeFavicon(level, null);
     if (dataUrl) {
       ensureOverlayLink(dataUrl);
