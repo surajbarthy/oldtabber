@@ -4,7 +4,7 @@ A **Chrome extension (Manifest V3)** that makes tabs feel like an “impossible 
 
 Because **Chrome does not allow extensions to paint native tab backgrounds**, Tab Aging instead:
 
-- **Overlays the page favicon** (red tint / badge by age bucket), and optionally  
+- **Adds a growing red dot** on the page favicon (by age level; no full-icon tint), and optionally  
 - **Prepends small markers to `document.title`** (which usually appears on the tab strip).
 
 All state is **local** (`chrome.storage.local`). No backend.
@@ -23,7 +23,7 @@ In **`utils.js`**, `FAST_TEST_MODE` is currently **`true`**: each threshold step
 
 ### Seeing favicon / title changes
 
-The tab you are **actively using** is always treated as **fresh** (age 0), so its favicon stays normal. To verify aging, open **at least two** http(s) tabs, stay on one for **30+ seconds**, then look at the **other** tab’s icon/title (or switch away and back). Check the page console (F12) for `[Tab Aging] favicon overlay applied level N` on the background tab when the alarm runs.
+The tab you are **actively using** is always treated as **fresh** (age 0), so its favicon stays normal. To verify aging, open **at least two** http(s) tabs, stay on one for **30+ seconds**, then look at the **other** tab’s icon/title (or switch away and back). Check the page console (F12) for `[Tab Aging] favicon dot badge level N` on the background tab when the alarm runs.
 
 ## Title markers (when enabled)
 
@@ -63,7 +63,7 @@ Internal schemes (`chrome://`, `edge://`, `about:`, `chrome-extension://`, `file
 | `manifest.json` | MV3 entry, permissions, service worker, content scripts, options UI. |
 | `utils.js` | URL normalization, age/level helpers, defaults (shared). |
 | `background.js` | Service worker: alarms, tab events, storage, messaging, injection fallback. |
-| `content.js` | Applies favicon canvas overlay + title markers; listens for `APPLY_AGE_STATE`. |
+| `content.js` | Canvas favicon + growing red dot + title markers; listens for `APPLY_AGE_STATE`. |
 | `options.html` / `options.js` | Toggle features, show thresholds, reset tracked pages. |
 | `README.md` | This document. |
 
@@ -93,7 +93,7 @@ Entries whose `lastSeenAt` is older than **180 days** are removed on the daily a
 
 ## Known limitations
 
-- **Favicon**: Many sites use **CORS**; reading the real favicon into a canvas may fail — the extension falls back to a **generated badge**.
+- **Favicon**: Many sites use **CORS**; if the real icon cannot be drawn, we use a **neutral gray tile** with the same **growing red dot** so the badge still shows.
 - **SPAs** (Google Calendar, Gmail, etc.) change `<title>` often; a `MutationObserver` on `<head>` re-applies the emoji marker when the app overwrites the title.
 - **Discarded / unloaded tabs** may not run content scripts until loaded again.
 - **Per-tab vs per-URL**: State is per **normalized URL**; two tabs on the same path share one `lastSeenAt`.

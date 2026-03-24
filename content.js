@@ -133,7 +133,8 @@
   }
 
   /**
-   * Draw a 32×32 favicon with optional base image and red overlay by level.
+   * 32×32 favicon: draw the real icon when the canvas allows it, then paint only a
+   * growing red dot (no full-frame tint). Dot radius scales with level 1–4.
    */
   function drawBadgeFavicon(level, baseImage) {
     var size = 32;
@@ -145,22 +146,23 @@
 
     ctx.clearRect(0, 0, size, size);
 
+    var drewBase = false;
     if (baseImage && baseImage.complete && baseImage.naturalWidth) {
       try {
         ctx.drawImage(baseImage, 0, 0, size, size);
+        drewBase = true;
       } catch (e) {
-        /* CORS taint — draw fallback plate */
-        ctx.fillStyle = '#e8e8e8';
-        ctx.fillRect(0, 0, size, size);
+        drewBase = false;
       }
-    } else {
-      ctx.fillStyle = 'rgba(240,240,240,0.92)';
+    }
+    if (!drewBase) {
+      ctx.fillStyle = '#ececec';
       ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = '#666';
-      ctx.font = 'bold 18px sans-serif';
+      ctx.fillStyle = '#888';
+      ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('·', size / 2, size / 2);
+      ctx.fillText('\u2022', size / 2, size / 2);
     }
 
     if (level <= 0) {
@@ -171,21 +173,20 @@
       }
     }
 
-    var alphaMap = U.FAST_TEST_MODE
-      ? [0.35, 0.55, 0.72, 0.88, 0.96]
-      : [0.12, 0.28, 0.52, 0.78, 0.92];
-    var a = alphaMap[Math.min(level, 4)];
+    /* Radius per level — bigger dot as urgency increases (index = level). */
+    var radii = [0, 3.5, 5.5, 8, 11];
+    var dotR = radii[Math.min(level, 4)];
+    var margin = 1.5;
+    var cx = size - dotR - margin;
+    var cy = size - dotR - margin;
 
-    ctx.fillStyle = 'rgba(220, 38, 38, ' + a + ')';
-    ctx.fillRect(0, 0, size, size);
-
-    /* Corner “ring” / dot for lower levels */
-    if (level <= 2) {
-      ctx.beginPath();
-      ctx.arc(size - 6, size - 6, level === 1 ? 3 : 5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(185, 28, 28, 0.95)';
-      ctx.fill();
-    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+    ctx.fillStyle = '#dc2626';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = level >= 3 ? 2 : 1.25;
+    ctx.stroke();
 
     try {
       return canvas.toDataURL('image/png');
@@ -287,7 +288,7 @@
     if (!dataUrl) dataUrl = drawBadgeFavicon(level, null);
     if (dataUrl) {
       ensureOverlayLink(dataUrl);
-      logDebug('favicon overlay applied level ' + level);
+      logDebug('favicon dot badge level ' + level);
     }
   }
 

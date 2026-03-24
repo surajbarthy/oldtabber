@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Aging",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Makes idle tabs feel more urgent by aging favicons and optional title markers — local-only, Manifest V3.",
   "permissions": [
     "storage",
