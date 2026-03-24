@@ -50,9 +50,11 @@ Thresholds are configurable in storage as `settings.agingThresholds` (default `[
 
 ## Favicon badge levels (generated)
 
+Badges are drawn **in the center** of a 32×32 canvas so they stay visible after Chrome scales the tab icon (corner-only graphics often looked like “nothing changed”).
+
 | Level | Appearance |
 |-------|------------|
-| 0 | _(managed link removed; site default)_ |
+| 0 | _(managed links removed; site default)_ |
 | 1 | Small orange dot |
 | 2 | Larger orange–red dot |
 | 3 | Red badge + stronger ring |

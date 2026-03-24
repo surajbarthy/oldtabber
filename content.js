@@ -10,6 +10,7 @@
 
   var DATA_ORIGINAL_TITLE = 'tabAgingOriginalTitle';
   var MANAGED_LINK_ID = 'tab-aging-managed-favicon';
+  var MANAGED_LINK_ID_2 = 'tab-aging-managed-favicon-2';
 
   var titleHeadObserver = null;
   var faviconHeadObserver = null;
@@ -105,7 +106,8 @@
       t = setTimeout(function () {
         pinManagedFaviconLast();
         var el = document.getElementById(MANAGED_LINK_ID);
-        if (!el || el.getAttribute('href').indexOf('data:') !== 0) {
+        var h = el ? el.getAttribute('href') || '' : '';
+        if (!el || h.indexOf('data:') !== 0) {
           try {
             applyManagedFaviconLevel(latestState.level);
           } catch (e) {
@@ -120,17 +122,19 @@
   function pinManagedFaviconLast() {
     var head = document.head;
     if (!head) return;
-    var el = document.getElementById(MANAGED_LINK_ID);
-    if (el) head.appendChild(el);
+    var a = document.getElementById(MANAGED_LINK_ID);
+    var b = document.getElementById(MANAGED_LINK_ID_2);
+    if (a) head.appendChild(a);
+    if (b) head.appendChild(b);
   }
 
   /**
-   * Pure generated badge — transparent background, no site bitmap (no CORS / taint).
-   * Level 1 tiny orange dot → 4 strong red + “!”.
+   * Pure generated badge — no site bitmap. Circle is **centered** so Chrome’s scaled-down
+   * tab icon still shows color (corner-only art was often invisible).
    */
   function generateBadgeFavicon(level) {
     if (level <= 0) return null;
-    var size = 64;
+    var size = 32;
     var canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
@@ -139,27 +143,26 @@
 
     ctx.clearRect(0, 0, size, size);
 
-    var pad = 5;
-    var radii = [0, 8, 13, 19, 26];
+    var radii = [0, 6, 9, 12, 14];
     var r = radii[Math.min(level, 4)];
-    var cx = size - pad - r;
-    var cy = size - pad - r;
+    var cx = size / 2;
+    var cy = size / 2;
 
     var fills = ['', '#fb923c', '#f97316', '#ef4444', '#b91c1c'];
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fillStyle = fills[level] || '#dc2626';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-    ctx.lineWidth = level >= 3 ? 3.5 : 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth = level >= 3 ? 2.5 : 1.5;
     ctx.stroke();
 
     if (level >= 4) {
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold ' + Math.round(r * 0.85) + 'px system-ui,Segoe UI,sans-serif';
+      ctx.font = 'bold 11px system-ui,Segoe UI,sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('!', cx, cy + 1);
+      ctx.fillText('!', cx, cy + 0.5);
     }
 
     try {
@@ -172,7 +175,13 @@
 
   function removeManagedFavicon() {
     var el = document.getElementById(MANAGED_LINK_ID);
+    var el2 = document.getElementById(MANAGED_LINK_ID_2);
     if (el) el.remove();
+    if (el2) el2.remove();
+    var orphans = document.querySelectorAll('link[data-tab-aging-managed="true"]');
+    for (var i = 0; i < orphans.length; i++) {
+      orphans[i].remove();
+    }
   }
 
   function applyManagedFaviconLevel(level) {
@@ -193,13 +202,26 @@
       link = document.createElement('link');
       link.id = MANAGED_LINK_ID;
       link.setAttribute('data-tab-aging-managed', 'true');
-      link.setAttribute('rel', 'icon shortcut icon');
+      link.setAttribute('rel', 'shortcut icon');
       link.setAttribute('type', 'image/png');
-      link.setAttribute('sizes', '64x64');
+      link.setAttribute('sizes', '32x32');
       document.head.appendChild(link);
     }
+
+    var link2 = document.getElementById(MANAGED_LINK_ID_2);
+    if (!link2) {
+      link2 = document.createElement('link');
+      link2.id = MANAGED_LINK_ID_2;
+      link2.setAttribute('data-tab-aging-managed', 'true');
+      link2.setAttribute('rel', 'icon');
+      link2.setAttribute('type', 'image/png');
+      link2.setAttribute('sizes', '32x32');
+      document.head.appendChild(link2);
+    }
+
     ensureFaviconHeadObserver();
     link.href = dataUrl;
+    link2.href = dataUrl;
     pinManagedFaviconLast();
     logd('managed favicon level', level);
   }
@@ -359,7 +381,7 @@
         logd('handleApplyMessage error', e);
         sendResponse({ ok: false });
       }
-      return true;
+      return false;
     }
   });
 
