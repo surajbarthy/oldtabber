@@ -1,6 +1,5 @@
 /**
- * Tab Aging — content script: composite favicon (site icon + optional tint + dot) + title markers.
- * Favicon bytes come from the service worker (data URL) so canvas stays untainted; tint/dot draw on top.
+ * Tab Aging — content script: optional title markers; favicon composite code kept for a future release.
  */
 (function () {
   'use strict';
@@ -395,7 +394,7 @@
     }
   }
 
-  function applyTitleFromState(settings, ageDays) {
+  function applyTitleFromState(settings, level) {
     if (!settings.useTitleMarkers) {
       disconnectTitleObserver();
       applyingTitle = true;
@@ -412,7 +411,7 @@
       return;
     }
 
-    var marker = U.getTitleMarker(ageDays, settings.agingThresholds);
+    var marker = level > 0 ? U.getTitleMarkerForLevel(level) : '';
     var base = captureOriginalTitleOnce();
 
     applyingTitle = true;
@@ -445,10 +444,12 @@
       return;
     }
 
-    var ageDays = latestState.ageDays | 0;
-    var level = latestState.level != null ? latestState.level : U.getAgeLevel(ageDays, s.agingThresholds);
+    var level =
+      latestState.level != null
+        ? latestState.level
+        : U.getLevelFromIdleMs(latestState.idleMs | 0, s.agingThresholdsMs);
 
-    applyTitleFromState(s, ageDays);
+    applyTitleFromState(s, level);
 
     try {
       if (wantsFaviconEffects(s)) {
@@ -484,20 +485,28 @@
     }
   }
 
+  /**
+   * Apply visuals asynchronously after updating latestState. Do not block the message response:
+   * the service worker awaits tabs.sendMessage per tab; a slow favicon fetch or image decode on
+   * one heavy tab would otherwise stall refreshAllTabsVisuals / onActiveTabContext for every
+   * other tab and, in FAST_TEST_MODE, prevent the alarm handler's finally from re-arming.
+   */
   function handleApplyMessage(msg) {
-    if (!msg || msg.type !== 'APPLY_AGE_STATE') return Promise.resolve();
+    if (!msg || msg.type !== 'APPLY_AGE_STATE') return;
 
     if (!msg.settings || !msg.settings.enabled) {
       restoreAllVisuals();
-      return Promise.resolve();
+      return;
     }
 
-    var ageDays = msg.ageDays | 0;
-    var level = msg.level != null ? msg.level : U.getAgeLevel(ageDays, msg.settings.agingThresholds);
+    var idleMs = typeof msg.idleMs === 'number' && isFinite(msg.idleMs) ? msg.idleMs : 0;
+    var norm = U.normalizeSettings(msg.settings || {});
+    var level =
+      msg.level != null ? msg.level : U.getLevelFromIdleMs(idleMs, norm.agingThresholdsMs);
 
     latestState = {
-      settings: U.normalizeSettings(msg.settings || {}),
-      ageDays: ageDays,
+      settings: norm,
+      idleMs: idleMs,
       level: level,
       pageUrl: msg.pageUrl || '',
     };
@@ -507,20 +516,20 @@
     }
 
     scheduleReapplySeries();
-    return applyAllFromLatest();
+    applyAllFromLatest().catch(function (e) {
+      logd('applyAllFromLatest error', e);
+    });
   }
 
   chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
     if (message && message.type === 'APPLY_AGE_STATE') {
-      handleApplyMessage(message)
-        .then(function () {
-          sendResponse({ ok: true });
-        })
-        .catch(function (e) {
-          logd('handleApplyMessage error', e);
-          sendResponse({ ok: false });
-        });
-      return true;
+      try {
+        handleApplyMessage(message);
+        sendResponse({ ok: true });
+      } catch (e) {
+        logd('handleApplyMessage error', e);
+        sendResponse({ ok: false });
+      }
     }
   });
 

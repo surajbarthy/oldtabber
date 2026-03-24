@@ -6,8 +6,6 @@
 
   var U = self.TabAgingUtils;
   var $enabled = document.getElementById('enabled');
-  var $dot = document.getElementById('dot');
-  var $tint = document.getElementById('tint');
   var $emoji = document.getElementById('emoji');
   var $openOptions = document.getElementById('openOptions');
   var $status = document.getElementById('status');
@@ -20,8 +18,6 @@
     var data = await chrome.storage.local.get(['settings']);
     var s = U.normalizeSettings(data.settings);
     $enabled.checked = !!s.enabled;
-    $dot.checked = !!s.useFaviconDot;
-    $tint.checked = !!s.useFaviconTint;
     $emoji.checked = !!s.useTitleMarkers;
   }
 
@@ -41,12 +37,6 @@
 
   $enabled.addEventListener('change', function () {
     savePartial({ enabled: $enabled.checked });
-  });
-  $dot.addEventListener('change', function () {
-    savePartial({ useFaviconDot: $dot.checked });
-  });
-  $tint.addEventListener('change', function () {
-    savePartial({ useFaviconTint: $tint.checked });
   });
   $emoji.addEventListener('change', function () {
     savePartial({ useTitleMarkers: $emoji.checked });

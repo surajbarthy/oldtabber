@@ -13,17 +13,130 @@
   var DEBUG = false;
 
   /**
-   * When true: one “aging unit” = 30 seconds and a chained alarm fires every 30s (see background.js).
-   * Set to false for production (real calendar days + one repeating alarm per 24h).
+   * Favicon dot/tint are implemented but disabled for this release (title-only). Set true in a
+   * future version and restore popup/options toggles to turn effects back on.
    */
-  var FAST_TEST_MODE = true;
-  var AGING_UNIT_MS = FAST_TEST_MODE ? 30 * 1000 : 86400000;
+  var FAVICON_EFFECTS_ENABLED = false;
+
+  /**
+   * When true: refresh alarm every 30s (see background.js). When false: periodic refresh every
+   * ALARM_PERIOD_MINUTES_PROD (wall-clock thresholds use real time either way).
+   */
+  var FAST_TEST_MODE = false;
   /** Chained one-shot alarms use fractional minutes (0.5 = 30s). Not used when FAST_TEST_MODE is false. */
   var FAST_TEST_ALARM_DELAY_MINUTES = 0.5;
-  var ALARM_PERIOD_MINUTES_PROD = 24 * 60;
+  /** Background refresh so background tabs pick up new emoji level without switching away. */
+  var ALARM_PERIOD_MINUTES_PROD = 5;
 
-  /** Default aging boundaries (days in prod, minutes when FAST_TEST_MODE): bumps at 1, 4, 8, 15+ */
-  var DEFAULT_THRESHOLDS = [1, 4, 8, 15];
+  /** Minimum idle gap between consecutive emoji tiers (ms). */
+  var MIN_STEP_GAP_MS = 60000;
+
+  /**
+   * Default: show 🔸 after 1d idle, 🔶 after 4d, 🔴 after 8d, ⛔ after 15d (same as legacy [1,4,8,15] days).
+   */
+  var DEFAULT_AGING_STEPS = [
+    { value: 1, unit: 'days' },
+    { value: 4, unit: 'days' },
+    { value: 8, unit: 'days' },
+    { value: 15, unit: 'days' },
+  ];
+
+  function unitToMsMult(unit) {
+    if (unit === 'minutes') return 60000;
+    if (unit === 'hours') return 3600000;
+    return 86400000;
+  }
+
+  function stepToMs(step) {
+    var v = Number(step.value);
+    if (!isFinite(v) || v < 1) v = 1;
+    return Math.floor(v * unitToMsMult(step.unit));
+  }
+
+  function cloneDefaultSteps() {
+    return DEFAULT_AGING_STEPS.map(function (s) {
+      return { value: s.value, unit: s.unit };
+    });
+  }
+
+  function migrateLegacyThresholdsDays(arr) {
+    if (!arr || arr.length !== 4) return null;
+    var out = [];
+    for (var i = 0; i < 4; i++) {
+      var n = Math.max(1, Math.round(Number(arr[i])));
+      if (!isFinite(n)) n = DEFAULT_AGING_STEPS[i].value;
+      out.push({ value: n, unit: 'days' });
+    }
+    return out;
+  }
+
+  /**
+   * Normalize four { value, unit } steps to strict time order (each tier strictly after the previous).
+   * @param {Array|null} steps
+   * @param {Array|null} legacyThresholds - old settings.agingThresholds (days as integers)
+   * @returns {{ steps: Array, thresholdsMs: number[] }}
+   */
+  function sanitizeAgingSteps(steps, legacyThresholds) {
+    var base = cloneDefaultSteps();
+    var parsed = [];
+    var i;
+    if (steps && Array.isArray(steps) && steps.length === 4) {
+      for (i = 0; i < 4; i++) {
+        var seg = steps[i];
+        var u =
+          seg && (seg.unit === 'minutes' || seg.unit === 'hours' || seg.unit === 'days')
+            ? seg.unit
+            : base[i].unit;
+        var v = seg != null ? Number(seg.value) : NaN;
+        if (!isFinite(v) || v < 1) v = base[i].value;
+        parsed.push({ value: v, unit: u });
+      }
+    } else {
+      var mig = migrateLegacyThresholdsDays(legacyThresholds);
+      parsed = mig || base;
+    }
+
+    var ms = parsed.map(stepToMs);
+    var iter;
+    for (iter = 0; iter < 24; iter++) {
+      var changed = false;
+      for (i = 1; i < 4; i++) {
+        if (ms[i] <= ms[i - 1]) {
+          ms[i] = ms[i - 1] + MIN_STEP_GAP_MS;
+          var mult = unitToMsMult(parsed[i].unit);
+          parsed[i].value = Math.ceil(ms[i] / mult);
+          if (parsed[i].value < 1) parsed[i].value = 1;
+          ms = parsed.map(stepToMs);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+
+    return { steps: parsed, thresholdsMs: ms };
+  }
+
+  function getIdleMs(lastSeenAt, nowMs) {
+    if (lastSeenAt == null || typeof lastSeenAt !== 'number') return 0;
+    var now = nowMs != null ? nowMs : Date.now();
+    var diff = now - lastSeenAt;
+    return diff < 0 ? 0 : diff;
+  }
+
+  /**
+   * Level 0 = no marker; 1–4 = 🔸 🔶 🔴 ⛔. Idle time must reach thresholdsMs[i] for level i+1.
+   */
+  function getLevelFromIdleMs(idleMs, thresholdsMs) {
+    var t =
+      thresholdsMs && thresholdsMs.length === 4
+        ? thresholdsMs
+        : sanitizeAgingSteps(null, null).thresholdsMs;
+    var level = 0;
+    for (var i = 0; i < 4; i++) {
+      if (idleMs >= t[i]) level = i + 1;
+    }
+    return Math.min(level, 4);
+  }
 
   /**
    * Browser-internal / non-web schemes we never inject into or track.
@@ -68,27 +181,6 @@
     }
   }
 
-  function getAgeDays(lastSeenAt, nowMs) {
-    if (lastSeenAt == null || typeof lastSeenAt !== 'number') return 0;
-    var now = nowMs != null ? nowMs : Date.now();
-    var diff = now - lastSeenAt;
-    if (diff < 0) return 0;
-    return Math.floor(diff / AGING_UNIT_MS);
-  }
-
-  /**
-   * Map age (whole days in prod, whole minutes in FAST_TEST_MODE) to visual level 0–4.
-   * thresholds: e.g. [1,4,8,15] → 0:<1, 1:1–3, 2:4–7, 3:8–14, 4:15+
-   */
-  function getAgeLevel(ageDays, thresholds) {
-    var t = thresholds && thresholds.length ? thresholds : DEFAULT_THRESHOLDS;
-    var level = 0;
-    for (var i = 0; i < t.length; i++) {
-      if (ageDays >= t[i]) level = i + 1;
-    }
-    return Math.min(level, 4);
-  }
-
   /** Title emoji markers by level (matches product spec). */
   function getTitleMarkerForLevel(level) {
     switch (level) {
@@ -105,34 +197,24 @@
     }
   }
 
-  function getTitleMarker(ageDays, thresholds) {
-    if (ageDays <= 0) return '';
-    return getTitleMarkerForLevel(getAgeLevel(ageDays, thresholds));
-  }
-
   function defaultSettings() {
+    var san = sanitizeAgingSteps(null, null);
     return {
       enabled: true,
       useTitleMarkers: true,
-      /** Corner dot drawn on top of the site favicon (after SW fetch → data URL). */
-      useFaviconDot: true,
-      /** Semi-transparent red wash on top of the site favicon. */
+      useFaviconDot: false,
       useFaviconTint: false,
-      agingThresholds: DEFAULT_THRESHOLDS.slice(),
+      agingSteps: san.steps,
+      agingThresholdsMs: san.thresholdsMs,
     };
   }
 
   /**
-   * Merge saved settings with defaults; migrate legacy useFaviconOverlay → dot+tint when needed.
+   * Merge saved settings with defaults; migrate legacy agingThresholds → agingSteps.
    */
   function normalizeSettings(raw) {
     var s = raw && typeof raw === 'object' ? raw : {};
     var o = Object.assign(defaultSettings(), s);
-    /**
-     * Legacy `useFaviconOverlay: true` meant “any favicon effect”. If the user never saved the
-     * new keys, turn both dot and tint on. If overlay was false, do **not** force dot/tint off —
-     * that wiped defaults and made upgrades look broken. Strip `useFaviconOverlay` from output.
-     */
     if (Object.prototype.hasOwnProperty.call(s, 'useFaviconOverlay')) {
       var hasDot = Object.prototype.hasOwnProperty.call(s, 'useFaviconDot');
       var hasTint = Object.prototype.hasOwnProperty.call(s, 'useFaviconTint');
@@ -142,22 +224,35 @@
       }
     }
     delete o.useFaviconOverlay;
+    if (!FAVICON_EFFECTS_ENABLED) {
+      o.useFaviconDot = false;
+      o.useFaviconTint = false;
+    }
+
+    var san = sanitizeAgingSteps(s.agingSteps, s.agingThresholds);
+    o.agingSteps = san.steps;
+    o.agingThresholdsMs = san.thresholdsMs;
+    delete o.agingThresholds;
+
     return o;
   }
 
   global.TabAgingUtils = {
     DEBUG: DEBUG,
+    FAVICON_EFFECTS_ENABLED: FAVICON_EFFECTS_ENABLED,
     FAST_TEST_MODE: FAST_TEST_MODE,
-    AGING_UNIT_MS: AGING_UNIT_MS,
     FAST_TEST_ALARM_DELAY_MINUTES: FAST_TEST_ALARM_DELAY_MINUTES,
     ALARM_PERIOD_MINUTES_PROD: ALARM_PERIOD_MINUTES_PROD,
-    DEFAULT_THRESHOLDS: DEFAULT_THRESHOLDS,
+    MIN_STEP_GAP_MS: MIN_STEP_GAP_MS,
+    DEFAULT_AGING_STEPS: DEFAULT_AGING_STEPS,
+    unitToMsMult: unitToMsMult,
+    stepToMs: stepToMs,
+    sanitizeAgingSteps: sanitizeAgingSteps,
+    getIdleMs: getIdleMs,
+    getLevelFromIdleMs: getLevelFromIdleMs,
     isRestrictedBrowserUrl: isRestrictedBrowserUrl,
     isTrackableUrl: isTrackableUrl,
     normalizeUrl: normalizeUrl,
-    getAgeDays: getAgeDays,
-    getAgeLevel: getAgeLevel,
-    getTitleMarker: getTitleMarker,
     getTitleMarkerForLevel: getTitleMarkerForLevel,
     defaultSettings: defaultSettings,
     normalizeSettings: normalizeSettings,

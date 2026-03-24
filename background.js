@@ -2,11 +2,11 @@
  * Tab Aging — MV3 service worker.
  *
  * Permissions (manifest.json):
- * - storage: persist pages + settings in chrome.storage.local
+ * - storage: persist per-tab last-seen times + settings in chrome.storage.local (tab:<id> keys)
  * - alarms: periodic refresh + stale-entry cleanup (fast-test chain vs 24h prod)
  * - tabs: read tab URLs / active state for “seen” and push APPLY_AGE_STATE
  * - scripting: inject utils.js + content.js when sendMessage fails (no content script yet)
- * - host_permissions http(s)/*: inject scripts + fetch favicon bytes in worker (no page CORS taint on canvas)
+ * - host_permissions http(s)/*: content scripts + optional favicon fetch (when favicon effects return)
  */
 importScripts('utils.js');
 
@@ -94,7 +94,15 @@ importScripts('utils.js');
 
   async function getState() {
     var data = await chrome.storage.local.get(['pages', 'settings']);
-    var pages = data.pages && typeof data.pages === 'object' ? data.pages : {};
+    var raw = data.pages && typeof data.pages === 'object' ? data.pages : {};
+    var pages = {};
+    var droppedLegacy = false;
+    for (var k in raw) {
+      if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
+      if (k.indexOf('tab:') === 0) pages[k] = raw[k];
+      else droppedLegacy = true;
+    }
+    if (droppedLegacy) await chrome.storage.local.set({ pages: pages });
     var settings = U.normalizeSettings(data.settings);
     return { pages: pages, settings: settings };
   }
@@ -106,8 +114,9 @@ importScripts('utils.js');
     await chrome.storage.local.set(patch);
   }
 
-  function pageKeyFromUrl(url) {
-    return U.normalizeUrl(url);
+  function pageKeyFromTabId(tabId) {
+    if (tabId == null || typeof tabId !== 'number') return '';
+    return 'tab:' + tabId;
   }
 
   async function cleanupOldPages(pages) {
@@ -127,9 +136,9 @@ importScripts('utils.js');
     return next;
   }
 
-  async function markPageSeen(url) {
+  async function markPageSeen(tabId, url) {
     if (!U.isTrackableUrl(url)) return;
-    var key = pageKeyFromUrl(url);
+    var key = pageKeyFromTabId(tabId);
     if (!key) return;
     var state = await getState();
     var rec = state.pages[key] || {};
@@ -144,14 +153,14 @@ importScripts('utils.js');
     });
   }
 
-  function computeAgeWithSettings(pages, settings, url, nowMs) {
-    var key = pageKeyFromUrl(url);
-    if (!key) return { ageDays: 0, level: 0 };
+  function computeAgeWithSettings(pages, settings, tabId, nowMs) {
+    var key = pageKeyFromTabId(tabId);
+    if (!key) return { idleMs: 0, level: 0 };
     var rec = pages[key];
-    if (!rec || typeof rec.lastSeenAt !== 'number') return { ageDays: 0, level: 0 };
-    var ageDays = U.getAgeDays(rec.lastSeenAt, nowMs);
-    var level = U.getAgeLevel(ageDays, settings.agingThresholds);
-    return { ageDays: ageDays, level: level };
+    if (!rec || typeof rec.lastSeenAt !== 'number') return { idleMs: 0, level: 0 };
+    var idleMs = U.getIdleMs(rec.lastSeenAt, nowMs);
+    var level = U.getLevelFromIdleMs(idleMs, settings.agingThresholdsMs);
+    return { idleMs: idleMs, level: level };
   }
 
   async function sendAgeToTab(tabId, url, settings, pages) {
@@ -166,7 +175,7 @@ importScripts('utils.js');
 
     var disabledPayload = {
       type: 'APPLY_AGE_STATE',
-      ageDays: 0,
+      idleMs: 0,
       level: 0,
       settings: settings,
       pageUrl: url,
@@ -196,10 +205,10 @@ importScripts('utils.js');
     }
 
     var now = Date.now();
-    var comp = computeAgeWithSettings(pages, settings, url, now);
+    var comp = computeAgeWithSettings(pages, settings, tabId, now);
     var payload = {
       type: 'APPLY_AGE_STATE',
-      ageDays: comp.ageDays,
+      idleMs: comp.idleMs,
       level: comp.level,
       settings: settings,
       pageUrl: url,
@@ -253,7 +262,7 @@ importScripts('utils.js');
       return;
     }
 
-    await markPageSeen(tab.url);
+    await markPageSeen(tabId, tab.url);
 
     var state = await getState();
     await sendAgeToTab(tabId, tab.url, state.settings, state.pages);
@@ -273,6 +282,19 @@ importScripts('utils.js');
     });
   });
 
+  chrome.tabs.onRemoved.addListener(function (closedTabId) {
+    (async function () {
+      var key = pageKeyFromTabId(closedTabId);
+      if (!key) return;
+      var state = await getState();
+      if (!state.pages[key]) return;
+      delete state.pages[key];
+      await saveState({ pages: state.pages });
+    })().catch(function (e) {
+      logd('onRemoved', e);
+    });
+  });
+
   /**
    * Active tab: mark seen + refresh all tabs. Background tabs: still push age state once
    * (otherwise new background loads stayed “cold” until you switched or the alarm fired).
@@ -283,7 +305,7 @@ importScripts('utils.js');
     (async function () {
       try {
         if (tab.active) {
-          await markPageSeen(tab.url);
+          await markPageSeen(tabId, tab.url);
           await onActiveTabContext(tabId);
         } else {
           var state = await getState();
