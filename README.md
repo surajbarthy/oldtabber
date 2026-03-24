@@ -1,8 +1,8 @@
-# Tab Aging
+# OldTabber
 
 A **Chrome extension (Manifest V3)** that makes tabs feel like an “impossible list”: the longer a page goes **without being the active, focused tab**, the more **urgent** it looks.
 
-Because **Chrome does not allow extensions to paint native tab backgrounds**, Tab Aging instead:
+Because **Chrome does not allow extensions to paint native tab backgrounds**, OldTabber instead:
 
 - **Composites the real favicon** (bytes fetched in the service worker → data URL, then drawn on a canvas) with optional **corner dot** and/or **red tint** by age level, and optionally  
 - **Prepends emoji markers to `document.title`**.
@@ -14,7 +14,7 @@ All state is **local** (`chrome.storage.local`). No backend.
 ## Why some sites were failing before
 
 - **Native tab color** cannot be changed by extensions; only signals the page exposes (favicon + title) are under partial control.
-- **Drawing the site favicon from a page-loaded `<img>`** often **taints** the canvas. Tab Aging **fetches icon bytes in the service worker** (allowed by `host_permissions`), returns a **data URL** to the content script, then **draws + dot/tint + `toDataURL()`** — that path is **not cross-origin tainted**. If fetch fails, a neutral placeholder is composited instead.
+- **Drawing the site favicon from a page-loaded `<img>`** often **taints** the canvas. OldTabber **fetches icon bytes in the service worker** (allowed by `host_permissions`), returns a **data URL** to the content script, then **draws + dot/tint + `toDataURL()`** — that path is **not cross-origin tainted**. If fetch fails, a neutral placeholder is composited instead.
 - **Upgrades from `useFaviconOverlay: false`**: an earlier build forced both dot and tint off permanently. Normalized settings now keep **default dot on** unless you saved the new toggles. Open the popup and toggle **Dot** / **Tint** once if favicons stay plain.
 - **SPAs** (Gmail, Calendar, etc.) may still **replace `<link rel="icon">` or `<title>`** after load. The content script **reapplies** state on a **short retry schedule**, **`visibilitychange`**, **`load`**, and a **debounced `MutationObserver` on `<head>`** so the badge/title come back without tight loops.
 

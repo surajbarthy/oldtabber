@@ -1,5 +1,5 @@
 /**
- * Tab Aging — options page: master switch + reset tracked tabs (timing is in the toolbar popup).
+ * OldTabber — options page: master switch + reset tracked tabs (timing is in the toolbar popup).
  */
 (function () {
   'use strict';
@@ -51,7 +51,7 @@
   });
 
   load().catch(function (e) {
-    console.debug('[Tab Aging] options load', e);
+    console.debug('[OldTabber] options load', e);
     setStatus('Failed to load settings.');
   });
 })();

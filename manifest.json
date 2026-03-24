@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Tab Aging",
-  "version": "1.3.0",
-  "description": "Idle-tab urgency: optional title emoji by how long since you last used each tab. MV3, local-only.",
+  "name": "OldTabber",
+  "version": "1.3.3",
+  "description": "OldTabber: gentle attention decay for tabs — title indicators by how long since you last used each tab. MV3, local-only.",
   "permissions": [
     "storage",
     "alarms",
@@ -15,7 +15,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Tab Aging"
+    "default_title": "OldTabber"
   },
   "background": {
     "service_worker": "background.js"

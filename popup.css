@@ -83,6 +83,17 @@ input[type='checkbox']#enabled {
   color: var(--muted);
 }
 
+.section-hint {
+  margin: -2px 0 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.indicator-block {
+  margin-top: 2px;
+}
+
 .mode-block {
   margin-bottom: 6px;
 }
@@ -230,6 +241,8 @@ input[type='checkbox']#enabled {
 .tier-emoji {
   font-size: 1rem;
   line-height: 1;
+  min-width: 1.35em;
+  text-align: center;
 }
 
 .tier-name {

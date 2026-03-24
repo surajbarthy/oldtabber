@@ -1,5 +1,5 @@
 /**
- * Tab Aging — content script: optional title markers; favicon composite code kept for a future release.
+ * OldTabber — content script: optional title markers; favicon composite code kept for a future release.
  */
 (function () {
   'use strict';
@@ -21,7 +21,7 @@
 
   function logd() {
     if (!U.DEBUG) return;
-    var a = ['[Tab Aging]'].concat(Array.prototype.slice.call(arguments));
+    var a = ['[OldTabber]'].concat(Array.prototype.slice.call(arguments));
     console.debug.apply(console, a);
   }
 
@@ -30,30 +30,15 @@
     return !!(settings.useFaviconDot === true || settings.useFaviconTint === true);
   }
 
-  var TITLE_MARKERS = ['\uD83D\uDD38', '\uD83D\uDD36', '\uD83D\uDD34', '\u26D4'];
-
-  function stripOurMarkers(rawTitle) {
-    if (!rawTitle) return '';
-    var s = rawTitle;
-    var changed = true;
-    while (changed) {
-      changed = false;
-      for (var i = 0; i < TITLE_MARKERS.length; i++) {
-        if (s.indexOf(TITLE_MARKERS[i]) === 0) {
-          s = s.slice(TITLE_MARKERS[i].length).replace(/^\s+/, '');
-          changed = true;
-          break;
-        }
-      }
-    }
-    return s;
+  function stripTitlePrefixes(rawTitle) {
+    return U.stripInjectedTitlePrefixes(rawTitle);
   }
 
   function captureOriginalTitleOnce() {
     var el = document.documentElement;
     var stored = el.getAttribute('data-' + DATA_ORIGINAL_TITLE);
     if (stored != null) return stored;
-    var base = stripOurMarkers(document.title);
+    var base = stripTitlePrefixes(document.title);
     el.setAttribute('data-' + DATA_ORIGINAL_TITLE, base);
     return base;
   }
@@ -86,7 +71,7 @@
         if (cur.indexOf(marker) === 0) return;
         applyingTitle = true;
         try {
-          document.title = marker + ' ' + stripOurMarkers(cur);
+          document.title = marker + ' ' + stripTitlePrefixes(cur);
         } catch (e) {
           logd('title reapply failed', e);
         } finally {
@@ -403,7 +388,7 @@
         if (el.hasAttribute('data-' + DATA_ORIGINAL_TITLE)) {
           document.title = el.getAttribute('data-' + DATA_ORIGINAL_TITLE);
         } else {
-          document.title = stripOurMarkers(document.title);
+          document.title = stripTitlePrefixes(document.title);
         }
       } finally {
         applyingTitle = false;
@@ -411,7 +396,8 @@
       return;
     }
 
-    var marker = level > 0 ? U.getTitleMarkerForLevel(level) : '';
+    var style = settings.indicatorStyle === 'emoji' ? 'emoji' : 'minimal';
+    var marker = level > 0 ? U.getTitleMarkerForLevel(level, style) : '';
     var base = captureOriginalTitleOnce();
 
     applyingTitle = true;
@@ -421,7 +407,7 @@
         disconnectTitleObserver();
         return;
       }
-      var plain = stripOurMarkers(document.title);
+      var plain = stripTitlePrefixes(document.title);
       var docEl = document.documentElement;
       if (plain !== base) {
         docEl.setAttribute('data-' + DATA_ORIGINAL_TITLE, plain);
@@ -475,7 +461,7 @@
       if (el.hasAttribute('data-' + DATA_ORIGINAL_TITLE)) {
         document.title = el.getAttribute('data-' + DATA_ORIGINAL_TITLE);
       } else {
-        document.title = stripOurMarkers(document.title);
+        document.title = stripTitlePrefixes(document.title);
       }
       el.removeAttribute('data-' + DATA_ORIGINAL_TITLE);
     } catch (e) {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tab Aging</title>
+    <title>OldTabber</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,7 +14,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Tab Aging</h1>
+      <h1>OldTabber</h1>
     </header>
 
     <div class="enable-row">
@@ -30,9 +30,20 @@
         <span id="custom-badge" class="custom-badge is-hidden" aria-live="polite">Custom</span>
       </div>
       <div class="mode-pills" role="group" aria-label="Attention decay mode">
-        <button type="button" class="mode-pill" data-preset="balanced">Balanced</button>
+        <button type="button" class="mode-pill is-selected" data-preset="balanced">Balanced</button>
         <button type="button" class="mode-pill" data-preset="focus">Focus</button>
         <button type="button" class="mode-pill" data-preset="chill">Chill</button>
+      </div>
+    </div>
+
+    <div class="mode-block indicator-block">
+      <div class="mode-row">
+        <span class="eyebrow">Indicator style</span>
+      </div>
+      <p class="section-hint">Choose how tab status appears in the title.</p>
+      <div class="mode-pills" role="group" aria-label="Title indicator style">
+        <button type="button" class="mode-pill indicator-pill is-selected" data-indicator="minimal">Minimal</button>
+        <button type="button" class="mode-pill indicator-pill" data-indicator="emoji">Emoji</button>
       </div>
     </div>
 
@@ -54,13 +65,13 @@
 
       <div class="tier-row" data-tier="0">
         <div class="tier-meta">
-          <span class="tier-emoji" aria-hidden="true">🔸</span>
+          <span class="tier-emoji" id="adv-marker-0" aria-hidden="true">·</span>
           <span class="tier-name">Level 1</span>
         </div>
         <div class="tier-fields">
           <input type="number" id="tier-0-num" min="1" step="1" value="30" aria-label="Level 1 value" />
           <select id="tier-0-unit" aria-label="Level 1 unit">
-            <option value="minutes">Minutes</option>
+            <option value="minutes" selected>Minutes</option>
             <option value="hours">Hours</option>
             <option value="days">Days</option>
           </select>
@@ -68,7 +79,7 @@
       </div>
       <div class="tier-row" data-tier="1">
         <div class="tier-meta">
-          <span class="tier-emoji" aria-hidden="true">🔶</span>
+          <span class="tier-emoji" id="adv-marker-1" aria-hidden="true">●</span>
           <span class="tier-name">Level 2</span>
         </div>
         <div class="tier-fields">
@@ -82,7 +93,7 @@
       </div>
       <div class="tier-row" data-tier="2">
         <div class="tier-meta">
-          <span class="tier-emoji" aria-hidden="true">🔴</span>
+          <span class="tier-emoji" id="adv-marker-2" aria-hidden="true">●</span>
           <span class="tier-name">Level 3</span>
         </div>
         <div class="tier-fields">
@@ -96,7 +107,7 @@
       </div>
       <div class="tier-row" data-tier="3">
         <div class="tier-meta">
-          <span class="tier-emoji" aria-hidden="true">⛔</span>
+          <span class="tier-emoji" id="adv-marker-3" aria-hidden="true">✖</span>
           <span class="tier-name">Level 4</span>
         </div>
         <div class="tier-fields">

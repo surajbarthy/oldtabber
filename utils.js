@@ -1,5 +1,5 @@
 /**
- * Tab Aging — shared utilities (content script + service worker via importScripts).
+ * OldTabber — shared utilities (content script + service worker via importScripts).
  * No ES modules: attaches to globalThis for Chrome extension contexts.
  */
 
@@ -238,19 +238,81 @@
     }
   }
 
-  /** Title emoji markers by level (matches product spec). */
-  function getTitleMarkerForLevel(level) {
+  /**
+   * Prefixes we may have injected (all styles + legacy). Longest UTF-16 length first for stripping.
+   */
+  function getTitleStripMarkersSortedDesc() {
+    var raw = [
+      '\u26A0\uFE0F',
+      '\u2620\uFE0F',
+      '\uD83D\uDD38',
+      '\uD83D\uDD36',
+      '\uD83D\uDD34',
+      '\u26D4',
+      '\uD83D\uDD25',
+      '\u23F3',
+      '\u25CF',
+      '\u2716',
+      '\u2715',
+      '\u25CB',
+      '\u00B7',
+      '\u26A0',
+      '\u2620',
+    ];
+    raw.sort(function (a, b) {
+      return b.length - a.length;
+    });
+    return raw;
+  }
+
+  /**
+   * Remove any known injected title prefix(es) from the start, repeatedly (e.g. "● ● Title").
+   */
+  function stripInjectedTitlePrefixes(rawTitle) {
+    if (!rawTitle) return '';
+    var s = rawTitle;
+    var markers = getTitleStripMarkersSortedDesc();
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var i = 0; i < markers.length; i++) {
+        var m = markers[i];
+        if (s.indexOf(m) === 0) {
+          s = s.slice(m.length).replace(/^\s+/, '');
+          changed = true;
+          break;
+        }
+      }
+    }
+    return s;
+  }
+
+  /**
+   * Title prefix for tab UI. indicatorStyle: "minimal" | "emoji" (default minimal).
+   */
+  function getTitleMarkerForLevel(level, indicatorStyle) {
+    if (level <= 0) return '';
+    var st = indicatorStyle === 'emoji' ? 'emoji' : 'minimal';
+    if (st === 'emoji') {
+      switch (level) {
+        case 1:
+          return '\u23F3';
+        case 2:
+          return '\u26A0\uFE0F';
+        case 3:
+          return '\uD83D\uDD25';
+        default:
+          return '\u2620\uFE0F';
+      }
+    }
     switch (level) {
-      case 0:
-        return '';
       case 1:
-        return '\uD83D\uDD38'; /* 🔸 */
+        return '\u00B7';
       case 2:
-        return '\uD83D\uDD36'; /* 🔶 */
       case 3:
-        return '\uD83D\uDD34'; /* 🔴 */
+        return '\u25CF';
       default:
-        return '\u26D4'; /* ⛔ */
+        return '\u2716';
     }
   }
 
@@ -261,6 +323,7 @@
       useTitleMarkers: true,
       useFaviconDot: false,
       useFaviconTint: false,
+      indicatorStyle: 'minimal',
       agingSteps: san.steps,
       agingThresholdsMs: san.thresholdsMs,
     };
@@ -293,6 +356,8 @@
 
     o.useTitleMarkers = true;
 
+    o.indicatorStyle = s.indicatorStyle === 'emoji' ? 'emoji' : 'minimal';
+
     return o;
   }
 
@@ -317,6 +382,8 @@
     isTrackableUrl: isTrackableUrl,
     normalizeUrl: normalizeUrl,
     getTitleMarkerForLevel: getTitleMarkerForLevel,
+    stripInjectedTitlePrefixes: stripInjectedTitlePrefixes,
+    getTitleStripMarkersSortedDesc: getTitleStripMarkersSortedDesc,
     defaultSettings: defaultSettings,
     normalizeSettings: normalizeSettings,
   };

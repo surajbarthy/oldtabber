@@ -1,5 +1,5 @@
 /**
- * Tab Aging — toolbar popup: mode-first UX, collapsible advanced timing.
+ * OldTabber — toolbar popup: mode-first UX, collapsible advanced timing.
  */
 (function () {
   'use strict';
@@ -13,7 +13,8 @@
   var $resetTabTimers = document.getElementById('resetTabTimers');
   var $openOptions = document.getElementById('openOptions');
   var $status = document.getElementById('status');
-  var $pills = document.querySelectorAll('.mode-pill');
+  var $pills = document.querySelectorAll('.mode-pill[data-preset]');
+  var $indicatorPills = document.querySelectorAll('.indicator-pill');
 
   var applyingFromSanitize = false;
   var saveTimer = null;
@@ -64,6 +65,23 @@
     num.max = String(mx);
     var v = Math.min(mx, Math.max(1, Math.round(Number(num.value)) || 1));
     num.value = String(v);
+  }
+
+  function refreshAdvancedTierMarkers(style) {
+    var st = style === 'emoji' ? 'emoji' : 'minimal';
+    for (var i = 0; i < 4; i++) {
+      var el = document.getElementById('adv-marker-' + i);
+      if (el) el.textContent = U.getTitleMarkerForLevel(i + 1, st);
+    }
+  }
+
+  function refreshIndicatorUI(style) {
+    var st = style === 'emoji' ? 'emoji' : 'minimal';
+    for (var i = 0; i < $indicatorPills.length; i++) {
+      var p = $indicatorPills[i];
+      p.classList.toggle('is-selected', p.getAttribute('data-indicator') === st);
+    }
+    refreshAdvancedTierMarkers(style);
   }
 
   function refreshModeUI() {
@@ -145,6 +163,7 @@
     $enabled.checked = !!s.enabled;
     applyStepsToForm(s.agingSteps);
     refreshModeUI();
+    refreshIndicatorUI(s.indicatorStyle);
   }
 
   $enabled.addEventListener('change', function () {
@@ -166,6 +185,19 @@
         onTierInputChanged();
       });
     })(t);
+  }
+
+  for (var ip = 0; ip < $indicatorPills.length; ip++) {
+    $indicatorPills[ip].addEventListener('click', function () {
+      var ind = this.getAttribute('data-indicator');
+      if (!ind) return;
+      refreshIndicatorUI(ind);
+      savePartial({ indicatorStyle: ind, useTitleMarkers: true });
+      setStatus('Saved');
+      setTimeout(function () {
+        setStatus('');
+      }, 1000);
+    });
   }
 
   for (var q = 0; q < $pills.length; q++) {
@@ -208,7 +240,7 @@
   });
 
   load().catch(function (e) {
-    console.debug('[Tab Aging] popup load', e);
+    console.debug('[OldTabber] popup load', e);
     setStatus('Could not load settings.');
   });
 })();

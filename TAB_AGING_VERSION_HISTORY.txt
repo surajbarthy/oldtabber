@@ -1,11 +1,11 @@
 ================================================================================
-  TAB AGING (oldtabber) — VERSION & WORK SUMMARY
-  Generated for reference / download. Manifest version as of this file: 1.2.9
+  OLDTABBER (repo: oldtabber) — VERSION & WORK SUMMARY
+  Product was previously branded “Tab Aging”. See manifest.json for current version.
 ================================================================================
 
 OVERVIEW
 --------
-Chrome MV3 extension: idle-tab urgency via optional title emoji (and earlier
+Chrome MV3 extension (OldTabber): idle-tab urgency via optional title indicators (and earlier
 iterations included favicon dot/tint). Aging is based on how long since you
 last focused each tab. Storage: chrome.storage.local. Per-tab tracking uses
 Chrome tab IDs so duplicate URLs age independently.
@@ -13,7 +13,7 @@ Chrome tab IDs so duplicate URLs age independently.
 
 CURRENT RELEASE (manifest.json)
 ---------------------------------
-Version: 1.2.9
+See repository manifest.json (this file may lag).
 
 • Toolbar popup: dark UI (near-black background, orange accents), master switch,
   full “step timing” controls (four emoji levels: slider + number + Minutes /
@@ -82,7 +82,7 @@ ba82832  feat: favicon uses growing red dot only, no full tint
 aa8f210  fix: re-apply title markers when SPAs overwrite document.title
 4e072a5  fix: favicon refresh + 30s fast-test ticks
 5041878  chore: fast test mode — 1 min alarm and minute-based aging units
-c99b486  feat: Tab Aging Chrome extension (Manifest V3)
+c99b486  feat: Chrome extension (Manifest V3), original Tab Aging branding
 
 
 EARLIER PRODUCT EVOLUTION (pre–1.2.7 single release)

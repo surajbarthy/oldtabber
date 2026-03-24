@@ -1,5 +1,5 @@
 /**
- * Tab Aging — MV3 service worker.
+ * OldTabber — MV3 service worker.
  *
  * Permissions (manifest.json):
  * - storage: persist per-tab last-seen times + settings in chrome.storage.local (tab:<id> keys)
@@ -77,7 +77,7 @@ importScripts('utils.js');
 
   function logd() {
     if (!U.DEBUG) return;
-    var a = ['[Tab Aging]'].concat(Array.prototype.slice.call(arguments));
+    var a = ['[OldTabber]'].concat(Array.prototype.slice.call(arguments));
     console.debug.apply(console, a);
   }
 
