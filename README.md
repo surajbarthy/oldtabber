@@ -1,143 +1,140 @@
 # OldTabber
 
-A **Chrome extension (Manifest V3)** that makes tabs feel like an “impossible list”: the longer a page goes **without being the active, focused tab**, the more **urgent** it looks.
+Chrome extension (Manifest V3, version 1.4.0) that marks tabs by how long it has been since you last used them. The longer a tab sits idle, the stronger the marker in its title.
 
-Because **Chrome does not allow extensions to paint native tab backgrounds**, OldTabber instead:
+Chrome does not let an extension paint the tab strip, so OldTabber prepends a marker to `document.title`. All state stays in `chrome.storage.local`. There is no account and no server.
 
-- **Composites the real favicon** (bytes fetched in the service worker → data URL, then drawn on a canvas) with optional **corner dot** and/or **red tint** by age level, and optionally  
-- **Prepends emoji markers to `document.title`**.
+## Markers
 
-Use the **toolbar popup** (click the extension icon) to toggle extension on/off, **dot**, **tint**, and **title emoji** independently. Full options (thresholds, reset) stay on the options page.
+The toolbar popup has two indicator styles. While the extension is on, title markers stay enabled (there is no separate marker toggle). Turning the extension off restores the page title.
 
-All state is **local** (`chrome.storage.local`). No backend.
+**Minimal** (default):
 
-## Why some sites were failing before
+| Level | Marker |
+| --- | --- |
+| 1 | · |
+| 2 | ○ |
+| 3 | ● |
+| 4 | ✖ |
 
-- **Native tab color** cannot be changed by extensions; only signals the page exposes (favicon + title) are under partial control.
-- **Drawing the site favicon from a page-loaded `<img>`** often **taints** the canvas. OldTabber **fetches icon bytes in the service worker** (allowed by `host_permissions`), returns a **data URL** to the content script, then **draws + dot/tint + `toDataURL()`** — that path is **not cross-origin tainted**. If fetch fails, a neutral placeholder is composited instead.
-- **Upgrades from `useFaviconOverlay: false`**: an earlier build forced both dot and tint off permanently. Normalized settings now keep **default dot on** unless you saved the new toggles. Open the popup and toggle **Dot** / **Tint** once if favicons stay plain.
-- **SPAs** (Gmail, Calendar, etc.) may still **replace `<link rel="icon">` or `<title>`** after load. The content script **reapplies** state on a **short retry schedule**, **`visibilitychange`**, **`load`**, and a **debounced `MutationObserver` on `<head>`** so the badge/title come back without tight loops.
+**Emoji:**
 
-## How aging works
+| Level | Marker |
+| --- | --- |
+| 1 | 🥚 |
+| 2 | ⏳ |
+| 3 | 🔥 |
+| 4 | ☠️ |
 
-- **`lastSeenAt`** is updated when a tab becomes **active** (and when an **http/https** tab **finishes loading** while active).
-- **Age** is `floor((now - lastSeenAt) / AGING_UNIT_MS)` — in production that unit is one **day** (`86400000` ms); see fast test mode below.
-- **Focusing a tab** sets `lastSeenAt` to now, so **age resets to 0** for that URL key while you are on it.
-- **Other open tabs** keep their own `lastSeenAt`; when you switch away, their favicons/titles refresh to reflect **their** staleness.
-- A **`chrome.alarms`** tick runs **cleanup** and **refreshes visuals** on open tabs (repeating **24h** in production; in fast test, a **30s** chained one-shot alarm).
+Below level 1 the title is left alone. A marker is a prefix (`· Example`). The content script removes a previous prefix before writing a new one, so markers do not stack. If the page rewrites `document.title`, the script puts the prefix back.
 
-### Fast test mode (development)
+Favicon dot and tint drawing exists in the extension and is switched off for this release. `normalizeSettings` forces both flags off, and the popup has no control for them. This version changes titles only.
 
-In **`utils.js`**, `FAST_TEST_MODE` is currently **`true`**: each threshold step uses **30 seconds** instead of one day, and the background schedules the next tick **every 30 seconds**. Set **`FAST_TEST_MODE`** to **`false`** and reload the extension for real-world behavior.
+## Presets
 
-### Debug logging
+Aging is four rising idle thresholds. **Balanced** is the default for a new install.
 
-In **`utils.js`**, set **`DEBUG`** to **`true`** and reload the extension. The service worker and content script will log lines such as applying level, inject retries, and skipped URLs. Leave **`false`** to avoid console noise.
+| Mode | Level 1 | Level 2 | Level 3 | Level 4 |
+| --- | --- | --- | --- | --- |
+| Balanced | 30 minutes | 2 hours | 1 day | 3 days |
+| Focus | 10 minutes | 30 minutes | 2 hours | 8 hours |
+| Chill | 1 hour | 6 hours | 2 days | 7 days |
 
-### Seeing favicon / title changes
+**Customize timing** in the popup sets each level in minutes, hours, or days (minimum 1; caps are 10080 minutes, 720 hours, and 365 days). Each level is kept strictly later than the one before it, at least one minute apart. Overlapping values are moved forward automatically. Timing that matches a preset selects that mode. Anything else shows a Custom badge.
 
-The tab you are **actively using** is always treated as **fresh** (age 0), so its favicon stays normal. To verify aging, open **at least two** http(s) tabs, stay on one for **30+ seconds** (in fast mode), then look at the **other** tab’s icon/title.
+**Reset to mode defaults** restores the selected preset. If the timing is custom, it restores Balanced.
 
-## Title markers (when enabled)
+## How a tab ages
 
-| Age (days, or 30s steps in fast test mode) | Marker |
-|------------|--------|
-| 0 | _(none)_ |
-| 1–3 | 🔸 |
-| 4–7 | 🔶 |
-| 8–14 | 🔴 |
-| 15+ | ⛔ |
+Each open tab has its own record, keyed by `tab:<tab id>`, with a `lastSeenAt` timestamp. A tab with no record yet has no marker. Idle time is `now - lastSeenAt`. Level *n* starts once idle time reaches that level’s threshold.
 
-Thresholds are configurable in storage as `settings.agingThresholds` (default `[1, 4, 8, 15]`). The options page **displays** them; editing numbers can be done via storage for now.
+- The timer starts, and `lastSeenAt` is set to now, when you focus the tab.
+- An http(s) page that finishes loading while it is the active tab does the same, and its marker clears.
+- The clock keeps running after that. A refresh updates titles and does not reset timers, including on the tab you are looking at.
+- Switching tabs refreshes every open tab and restarts the timer only for the tab you just focused.
+- Closing a tab deletes its record. Two tabs on the same URL have separate timers.
+- Every 5 minutes an alarm refreshes open tabs and removes records whose `lastSeenAt` is older than 180 days.
 
-## Favicon (composite on site icon)
+Only `http` and `https` pages are tracked. These are skipped: `chrome://`, `edge://`, `about:`, `chrome-extension://`, `moz-extension://`, `devtools://`, `view-source:`, and `file://`.
 
-| Setting | Effect |
-|--------|--------|
-| **Dot** | Corner badge on top of the decoded favicon; size grows with age level. |
-| **Tint** | Semi-transparent red rectangle over the whole icon; strength grows with level. |
+In `utils.js`, `FAST_TEST_MODE` is `false`, so thresholds use real time and the refresh alarm repeats every 5 minutes. Set `FAST_TEST_MODE` to `true` and reload the extension to use a 30-second alarm instead. Thresholds stay on wall-clock time either way. Set `DEBUG` to `true` in the same file for service-worker and content-script logs.
 
-You can enable **dot only**, **tint only**, or **both**. If both are off, only title markers apply (when enabled).
+To see a marker quickly: open two http(s) tabs so each one has been focused, choose Focus or set Level 1 to 1 minute, stay on one tab, then read the other tab’s title. A tab that has never been focused has no timer yet.
 
-## Load unpacked in Chrome
+## Toolbar and options
 
-1. Open **`chrome://extensions`**.
-2. Turn on **Developer mode**.
-3. Click **Load unpacked**.
-4. Select the folder that contains **`manifest.json`** (this project root).
+Click the toolbar icon.
 
-## Permissions (why they exist)
+- **Extension on** — master switch. Off restores normal titles.
+- **Mode** — Balanced, Focus, or Chill.
+- **Indicator style** — Minimal or Emoji. The customize panel shows the matching glyphs.
+- **Customize timing** — the four levels, plus reset to the current mode’s defaults.
+- **Reset all tab timers** — clears every stored last-focus time after a confirm.
+- **Extension settings** — opens the options page.
 
-| Permission | Reason |
-|------------|--------|
-| `storage` | Persist `pages` + `settings`. |
-| `alarms` | Periodic refresh + stale entry cleanup (daily in prod, 30s chain in fast test). |
-| `tabs` | Read tab URLs / active state for “seen” and broadcasting visuals. |
-| `scripting` | Inject `utils.js` + `content.js` when `sendMessage` fails (race / no script yet). |
-| `host_permissions` `http://*/*`, `https://*/*` | Declarative content scripts + programmatic injection on normal websites (MVP). |
+The options page (also under the extension’s Details) repeats the master switch and **Reset all tracked tabs**. Mode, indicator style, and step timing stay in the popup.
 
-Internal schemes (`chrome://`, `edge://`, `about:`, `chrome-extension://`, `devtools://`, `view-source:`, `file://`, etc.) are **skipped** by `isTrackableUrl` in **`utils.js`**.
+The popup and options page request Inter from Google Fonts. Without that request they use a system font.
 
-## File structure
+## Permissions
 
-| File | Role |
-|------|------|
-| `manifest.json` | MV3 entry, permissions, service worker, content scripts, options UI. |
-| `utils.js` | URL guards, age/level, `DEBUG`, defaults (shared). |
-| `background.js` | Service worker: alarms, tab events, storage, messaging, inject + retry. |
-| `content.js` | Favicon composite + title markers, reapplies, observers. |
-| `popup.html` / `popup.js` | Toolbar menu: master + dot + tint + emoji toggles. |
-| `options.html` / `options.js` | Same toggles + thresholds + reset tracked pages. |
-| `README.md` | This document. |
+| Permission | Why |
+| --- | --- |
+| `storage` | Save per-tab last-seen times and settings in `chrome.storage.local`. |
+| `alarms` | Refresh open tabs and drop records older than 180 days, every 5 minutes. |
+| `tabs` | Read each tab’s URL and active state, then send the current age to the page. |
+| `scripting` | Inject `utils.js` and `content.js` when a tab does not have them yet. |
+| `http://*/*`, `https://*/*` | Inject the content script into matching pages, and let the service worker request those sites. |
 
-## Data model
+Content scripts are `utils.js` then `content.js`, on `http://*/*` and `https://*/*`, at `document_idle`.
+
+## Storage
+
+Two keys in `chrome.storage.local`. A fresh install saves the settings below (Balanced, minimal). `pages` stays empty until a tab is focused; the `tab:123` entry is the shape of one record.
 
 ```json
 {
   "pages": {
-    "https://example.com/path": {
+    "tab:123": {
       "lastSeenAt": 1710000000000
     }
   },
   "settings": {
     "enabled": true,
     "useTitleMarkers": true,
-    "useFaviconDot": true,
+    "useFaviconDot": false,
     "useFaviconTint": false,
-    "agingThresholds": [1, 4, 8, 15]
+    "indicatorStyle": "minimal",
+    "agingSteps": [
+      { "value": 30, "unit": "minutes" },
+      { "value": 2, "unit": "hours" },
+      { "value": 1, "unit": "days" },
+      { "value": 3, "unit": "days" }
+    ],
+    "agingThresholdsMs": [1800000, 7200000, 86400000, 259200000]
   }
 }
 ```
 
-URLs are keyed by **origin + pathname** (no query, no hash).
+`agingThresholdsMs` is derived from `agingSteps`. `useTitleMarkers` is forced on. `useFaviconDot` and `useFaviconTint` are forced off. If saved settings have no four-step `agingSteps`, an older day-count `agingThresholds` array is converted into day steps. Page records whose keys do not start with `tab:` are discarded on read.
 
-## Storage cleanup
+## Load unpacked in Chrome
 
-Entries whose `lastSeenAt` is older than **180 days** are removed on the daily alarm so storage does not grow forever.
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the folder that contains `manifest.json` (the repository root).
 
-## Known limitations
+There is no install step and no package to build.
 
-- **Opaque vs transparent favicons** are composited on a **light matte** so tint/dot stack predictably; tint uses **multiply** as a second pass so busy/opaque icons still read as “aged.”
-- **Service worker sleep**: alarms are **re-registered** when the worker starts if missing; **background tab** navigations call `sendAgeToTab` on `complete` (not only the active tab).
-- **Discarded / unloaded tabs** may not run content scripts until loaded again.
-- **Per-tab vs per-URL**: State is per **normalized URL**; two tabs on the same path share one `lastSeenAt`.
-- **Favicon**: If a tab strip still ignores a data-URL `link` (rare), **title markers** remain the fallback when enabled.
+## Files
 
-## Manual test checklist
-
-1. **Normal static site** (e.g. `https://example.com`): open two tabs, age one in the background; confirm **dot/tint on real favicon** (popup toggles) + optional title marker on the stale tab; active tab clean.
-2. **SPA** (e.g. Google Calendar): after navigation or delayed title/icon changes, confirm badge/title **reappear** after retries or tab focus (`visibilitychange`).
-3. **Restricted URL** (`chrome://extensions`, `file://`): extension should **not** inject; no errors spamming the page console.
-4. **Tab visible again**: switch away and back; stale tabs should **refresh** visuals.
-5. **Title changes after load**: SPA that updates `document.title`; marker should **stay** once (no duplicate emoji run) via observer + strip logic.
-
-## Future ideas
-
-- Tab groups / color hints where the API allows  
-- Snooze (“don’t age until …”)  
-- Custom curves, per-site rules, query-aware keys  
-- Optional popup with “oldest tabs” list  
-
-## License
-
-Use and modify freely for personal projects.
+| File | Role |
+| --- | --- |
+| `manifest.json` | Manifest V3: name, version, permissions, service worker, content scripts, popup, options. |
+| `utils.js` | URL checks, presets, idle time to level, title markers, settings normalization. |
+| `background.js` | Tab events, the 5-minute alarm, storage, and messages to pages. |
+| `content.js` | Writes and restores the title prefix. |
+| `popup.html`, `popup.js`, `popup.css` | Toolbar: on/off, mode, indicator style, custom timing, reset timers. |
+| `options.html`, `options.js` | Master switch and reset all tracked tabs. |
+| `icons/` | Extension icons (`icon16`, `icon32`, `icon48`, `icon128`) and `popup-logo.png`. |
